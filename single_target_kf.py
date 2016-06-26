@@ -11,104 +11,96 @@ import sys
 sys.path.append("/Users/jkuck/rotation3/Kalman-and-Bayesian-Filters-in-Python/code")
 sys.path.append("/Users/jkuck/rotation3/Kalman-and-Bayesian-Filters-in-Python")
 sys.path.append("/usr/local/lib/python2.7/site-packages/filterpy")
-
-
-
-#import book_plots as bp
-#import mkf_internal
-#from code.mkf_internal import plot_track
-
-#from importlib.machinery import SourceFileLoader
-#plot_track = SourceFileLoader("plot_track", "/Users/jkuck/rotation3/Kalman-and-Bayesian-Filters-in-Python/code/mkf_internal.py").load_module()
-#foo.MyClass()
-
-#import importlib.util
-#spec = importlib.util.spec_from_file_location("code.mkf_internal.plot_track", "/Users/jkuck/rotation3/Kalman-and-Bayesian-Filters-in-Python/code/mkf_internal.py")
-#plot_track = importlib.util.module_from_spec(spec)
-#spec.loader.exec_module(plot_track)
-#plot_track.MyClass()
-
-#from importlib.machinery import SourceFileLoader
-#read_radar_data = SourceFileLoader("read_radar_data", "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/utils/read_radar_data_from_txt.py").load_module()
-
-#from read_radar_data_from_txt import read_radar_data
+from scipy.stats import multivariate_normal
 
 def pos_vel_filter(x, P, R, Q=0., dt=1.0):
     """ Returns a KalmanFilter which implements a
     constant velocity model for a state [x dx].T
     """
     
-    kf = KalmanFilter(dim_x=2, dim_z=1)
-    kf.x = np.array([x[0], x[1]]) # location and velocity
-    kf.F = np.array([[1, dt],
-                     [0,  1]])    # state transition matrix
-    kf.H = np.array([[1, 0]])     # Measurement function
-    kf.R *= R                   # measurement uncertainty
+    kf = KalmanFilter(dim_x=4, dim_z=2)
+    kf.x = np.array([x[0], x[1], x[2], x[3]]) # location and velocity
+    kf.F = np.array([[1, dt,  0,  0],
+                     [0,  1,  0,  0],
+                     [0,  0,  1, dt],
+                     [0,  0,  0,  1]])    # state transition matrix
+    kf.H = np.array([[1, 0, 0, 0],
+                     [0, 0, 1, 0]])     # Measurement function
+
+
     if np.isscalar(P):
         kf.P *= P                 # covariance matrix 
     else:
         kf.P[:] = P
     if np.isscalar(Q):
-        kf.Q = Q_discrete_white_noise(dim=2, dt=dt, var=Q)
+#        kf.Q = Q_discrete_white_noise(dim=2, dt=dt, var=Q)
+        kf.Q *= Q
     else:
         kf.Q = Q
+
+    if np.isscalar(R):
+        kf.R *= R                 # measurement uncertainty
+    else:
+        kf.R[:] = R
+
     return kf
 
-def plot_track(ps, zs, cov, std_scale=1,
-               plot_P=True, y_lim=None, dt=1.,
-               xlabel='time', ylabel='position',
-               title='Kalman Filter'):
-#def plot_track(ps, actual, zs, cov, std_scale=1,
-#               plot_P=True, y_lim=None, dt=1.,
-#               xlabel='time', ylabel='position',
-#               title='Kalman Filter'):
 
-#    with interactive_plot():
-    count = len(zs)
-    zs = np.asarray(zs)
+def m_step(x_predictions, x_posteriors, measurements, H):
+    """
+    Input:
+    - x_predictions: The predicted state variables at every time step
+    - x_posteriors: The posterior state variables at every time step
+        after performing the Kalman filter update (with the 
+        corresponding measurement).
+    - measurements: The measurements at every time step.  
+    * note: Time step indexing is consistent between x_predictions,
+        x_posteriors, and measurements
+    -H: Measurement function matrix (Hx = x' where x is in the 
+        state space and x' is in the measurement space)
 
-    cov = np.asarray(cov)
-    std = std_scale*np.sqrt(cov[:,0,0])
-#        std_top = np.minimum(actual+std, [count + 10])
-#        std_btm = np.maximum(actual-std, [-50])
-#
-#        std_top = actual + std
-#        std_btm = actual - std
-#
-#        bp.plot_track(actual,c='k')
+    Return:
+    - Q: Maximum likelihood estimate of the process noise covariance 
+        matrix.  This is calculated as the covariance matrix of
+        (x_posteriors - x_predictions)
+    - R: Maximum likelihood estimate of the measurement noise covariance 
+        matrix.  This is calculated as the covariance matrix of
+        (measurements - x_posteriors)
+    * note: We would hope the mean of both (x_posteriors - x_predictions)
+        and (measurements - x_posteriors) is zero, but this is not 
+        guaranteed.  Think about adjusting motion model and measurement
+        function to account for this.
+    """
 
-    std_top = np.minimum(zs+std, [count + 10])
-    std_btm = np.maximum(zs-std, [-50])
+    Q = np.cov((x_posteriors - x_predictions).T, bias = True)
+    R = np.cov((measurements.T - np.dot(H,x_posteriors.T)), bias = True)
+    return (Q, R)
 
-    std_top = zs + std
-    std_btm = zs - std
+def calc_LL(x_posteriors, cov, measurements, H, R):
+    assert(len(x_posteriors) == len(cov) and len(cov) == len(measurements))
+    LL = 0
+#    print "len(cov) = ", len(cov)
+#    print "cov.shape = ", cov.shape
+    for i in range(0, len(cov)):
+#        print "shape H = ", H.shape
+#        print "shape P[i] = ", cov[i].shape
+#        print "shape R = ", R.shape
+        S = np.dot(np.dot(H, cov[i]), H.T) + R
+        state_posterior_in_meas_space = np.dot(H, x_posteriors[i])
+        distribution = multivariate_normal(mean=state_posterior_in_meas_space, cov=S)
+        LL += np.log(distribution.pdf(measurements[i]))
+    return LL
 
-    bp.plot_measurements(range(1, count + 1), zs)
-    bp.plot_filter(range(1, count + 1), ps)
-
-    plt.plot(std_top, linestyle=':', color='k', lw=1, alpha=0.4)
-    plt.plot(std_btm, linestyle=':', color='k', lw=1, alpha=0.4)
-    plt.fill_between(range(len(std_top)), std_top, std_btm,
-                     facecolor='yellow', alpha=0.2, interpolate=True)
-    plt.legend(loc=4)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    if y_lim is not None:
-        plt.ylim(y_lim)
-    else:
-        plt.ylim((-50, count + 10))
-
-    plt.xlim((0,count))
-    plt.title(title)
-
-    if plot_P:
-#        with interactive_plot():
-        ax = plt.subplot(121)
-        ax.set_title("$\sigma^2_x$ (pos variance)")
-        plot_covariance(cov, (0, 0))
-        ax = plt.subplot(122)
-        ax.set_title("$\sigma^2_\dot{x}$ (vel variance)")
-        plot_covariance(cov, (1, 1))
+def run_EM_on_Q_R(x0=(0.,0.,0.,0.), P=500, R=0, Q=0, dt=1.0, data=None):
+    log_likelihoods = []
+    for i in range(0,5):
+        print "iteration ", i, ":"
+        print "Q = ", Q
+        print "R = ", R
+        x_posteriors, x_predictions, cov, H, R = run(x0=x0, P=P, R=R, Q=Q, dt=dt, data=data)
+        log_likelihoods.append(calc_LL(x_posteriors, cov, data, H, R))
+        Q, R = m_step(x_predictions, x_posteriors, data, H)
+    return log_likelihoods
 
 def read_radar_data(file_name):
     f = open(file_name, 'r')
@@ -155,47 +147,54 @@ def get_cmap(N):
         return scalar_map.to_rgba(index)
     return map_index_to_rgb_color
 
-def run(x0=(0.,0.), P=500, R=0, Q=0, dt=1.0, data=None,
-        count=0, do_plot=True, **kwargs):
+def run(x0=(0.,0.,0.,0.), P=500, R=0, Q=0, dt=1.0, data=None):
     """
-    `data` is a 1D numpy array containing the measurements
+    `data` is a (number_of_measurements x dimension_of_measurements) 
+    numpy array containing the measurements
     """
 
     # create the Kalman filter
-    kf = pos_vel_filter(x0, R=R, P=P, Q=Q, dt=dt)  
+    kf = pos_vel_filter(x=x0, R=R, P=P, Q=Q, dt=.09)  
 
     # run the kalman filter and store the results
-    xs, cov = [], []
+    x_posteriors, x_predictions, cov = [], [], []
     for z in data:
         kf.predict()
+        x_predictions.append(kf.x)
         kf.update(z)
-        xs.append(kf.x)
+        x_posteriors.append(kf.x)
         cov.append(kf.P)
 
-    xs, cov = np.array(xs), np.array(cov)
-    if do_plot:
-        plot_track(xs[:, 0], data, cov, 
-                   dt=dt, **kwargs)
-    else:
-        cmap = get_cmap(100)
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        print xs.shape
-        print data.shape
-        ax.scatter([i for i in range(0,1216)], xs[:,0], marker = '+', c = cmap(1))
-        ax.scatter([i for i in range(0,1216)], data, marker = '*', c = cmap(99))
-        plt.show()
-    return xs, cov
+    x_posteriors, x_predictions, cov = np.array(x_posteriors), np.array(x_predictions), np.array(cov)
 
+    print "cov.shape = ", cov.shape
 
-#####dt = .1
-#####x = np.array([0., 0.]) 
-#####kf = pos_vel_filter(x, P=500, R=5, Q=0.1, dt=dt)
+    cmap = get_cmap(100)
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.scatter(x_posteriors[:,0], x_posteriors[:, 2], marker = '+', c = cmap(1))
+    ax.scatter(data[:,0], data[:,1], marker = '*', c = cmap(99))
+    plt.show()
+
+    return x_posteriors, x_predictions, cov, kf.H, kf.R
+
 
 (lat_pos, lng_pos, lat_vel, lng_vel) = read_radar_data('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/utils/radar_data.txt')
 
 print type(lat_pos)
 
+if False:
+    P = np.diag([10., 5., 10., 5.])
+    Ms, Ps = run(R=1, Q=1, P=P, data=np.concatenate((np.expand_dims(lat_pos[:,54], axis=1), np.expand_dims(lng_pos[:,54], axis=1)), axis=1))
+
 if True:
-    P = np.diag([500., 49.])
-    Ms, Ps = run(count=50, R=1, Q=1, P=P, data=lng_pos[:,54], do_plot=False)
+    P = np.diag([10., 5., 10., 5.])
+    log_likelihoods = run_EM_on_Q_R(R=1000, Q=.00010, P=P, data=np.concatenate((np.expand_dims(lat_pos[:,54], axis=1), np.expand_dims(lng_pos[:,54], axis=1)), axis=1))
+    print log_likelihoods
+    cmap = get_cmap(100)
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.scatter([i for i in range(0, len(log_likelihoods))], log_likelihoods, marker = '+', c = cmap(1))
+    plt.show()
+
+
