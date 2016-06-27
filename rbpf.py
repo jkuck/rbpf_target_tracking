@@ -13,7 +13,7 @@ import random
 import copy 
 import math
 
-N_particles = 10 #number of particles used in the particle filter
+N_particles = 100 #number of particles used in the particle filter
 
 p_clutter = .9 #probability of associating a measurement with clutter
 p_birth = .1 #probability of associating a measurement with a new target
@@ -21,24 +21,33 @@ p_birth = .1 #probability of associating a measurement with a new target
 
 #Kalman filter defaults
 P_default = np.diag([10., 5., 10., 5.])
-R_default = 1000
-Q_default = .00010
+R_default = np.array([[ 0.04499246,  0.05549335, -0.17198677, -0.00532710],
+ 					  [ 0.05549335,  0.10692745, -0.29580029, -0.01258159],
+ 					  [-0.17198677, -0.29580029,  1.54644632, -0.00529713],
+ 					  [-0.00532710, -0.01258159, -0.00529713,  0.00544296]])
+Q_default = np.array([[ 4.05478317e-04,5.53907275e-05,-2.31993904e-03,-5.80464091e-05],
+ 					  [ 5.53907275e-05,4.06586702e-04, 9.80342656e-03, 3.04183540e-04],
+ 					  [-2.31993904e-03,9.80342656e-03, 3.23430417e-01, 7.98461527e-03],
+ 					  [-5.80464091e-05,3.04183540e-04, 7.98461527e-03, 3.65214796e-04]])
 
 #Gamma distribution parameters for calculating target death probabilities
 alpha_death = 2.0
-beta_death = 1.0
+beta_death = 2.0
 
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .09 
+#for displaying results only show targets older than this (in seconds)
+min_target_age = 3
 
 class Target:
 	def __init__(self, measurement, cur_time):
 		#Targets tracked by this particle
-		self.kf = pos_vel_filter(np.array([measurement[0],0,measurement[1],0]),
+		self.kf = pos_vel_filter(np.array([measurement[0],measurement[1],measurement[2],measurement[3]]),
 								 P = P_default, R = R_default, Q=Q_default)
 
 		#Time of the last measurement data association with this target
 		self.last_measurement_association = cur_time
+		self.birth_time = cur_time
 
 	def process_measurement(self, measurement, time):
 		""" Perform Kalman filter predict and update step
@@ -138,6 +147,7 @@ class Particle:
 				self.targets[:] = [target for target in self.targets if (target != cur_target)]
 				num_targets_killed += 1
 		assert(len(self.targets) == (original_num_targets - num_targets_killed))
+		print "targets killed = ", num_targets_killed
 
 	@profile
 	def sample_data_assoc(self, measurement):
@@ -234,10 +244,12 @@ def pos_vel_filter(x_init, P, Q, R):
 	- kf: Kalman filter initialized with inputs
     """
     
-    kf = KalmanFilter(dim_x=4, dim_z=2)
+    kf = KalmanFilter(dim_x=4, dim_z=4)
     kf.x = x_init 
-    kf.H = np.array([[1, 0, 0, 0],
-                     [0, 0, 1, 0]])     # Measurement function
+    kf.H = np.array([[1,  0,  0,  0],
+                     [0,  1,  0,  0],
+                     [0,  0,  1,  0],
+                     [0,  0,  0,  1]])     # Measurement function
 
 
     if np.isscalar(P):
@@ -289,6 +301,7 @@ def perform_resampling(particle_set):
 		new_particle_set.append(copy.deepcopy(particle_set[index]))
 	del particle_set[:]
 	for particle in new_particle_set:
+		particle.importance_weight = 1.0/N_particles
 		particle_set.append(particle)
 	assert(len(particle_set) == N_particles)
 	#testing
@@ -298,11 +311,37 @@ def perform_resampling(particle_set):
 	assert(sum(weights) - 1.0 < .01), sum(weights)
 	#done testing
 
-def display_target_counts(particle_set):
+def display_target_counts(particle_set, cur_time):
 	target_counts = []
 	for particle in particle_set:
 		target_counts.append(len(particle.targets))
 	print target_counts
+
+	target_counts = []
+	for particle in particle_set:
+		cur_target_count = 0
+		for target in particle.targets:
+			if (cur_time - target.birth_time) > min_target_age:
+				cur_target_count += 1
+		target_counts.append(cur_target_count)
+	print "targets older than ", min_target_age, "seconds: ", target_counts
+
+def get_mature_target_positions(particle_set, cur_time):
+	"""
+	For displaying results, get positions of all targets older than 
+	min_target_age as a list of lateral positions and a list of longitudinal 
+	positions
+	"""
+	lat_pos = []
+	lng_pos = []
+	for particle in particle_set:
+		for target in particle.targets:
+			if (cur_time - target.birth_time) > min_target_age:
+				lat_pos.append(target.kf.x[0])
+				lng_pos.append(target.kf.x[2])
+
+	return (lat_pos, lng_pos)
+
 
 @profile
 def run_rbpf(all_measurements):
@@ -321,6 +360,12 @@ def run_rbpf(all_measurements):
 
 	num_measurement_processed = 0 #just to see how fast it's running
 
+	#for displaying results
+	lat_pos = []
+	lng_pos = []
+
+	iter = 0 # for plotting only occasionally
+
 	for (time_stamp, measurements_at_cur_time) in all_measurements:
 		print num_measurement_processed
 		for particle in particle_set:
@@ -337,7 +382,20 @@ def run_rbpf(all_measurements):
 
 		prev_time_stamp = time_stamp
 		num_measurement_processed += 1
-		display_target_counts(particle_set)
+		display_target_counts(particle_set, time_stamp)
+
+		#display results
+		(cur_lat_pos, cur_lng_pos) = get_mature_target_positions(particle_set,
+																 time_stamp)
+		lat_pos += cur_lat_pos
+		lng_pos += cur_lng_pos
+
+		if iter%30 == 0:
+			fig = plt.figure()
+			ax = fig.add_subplot(1, 1, 1)
+			ax.scatter(lat_pos, lng_pos)
+			plt.show()
+		iter+=1
 
 def read_radar_data(file_name):
 	"""
@@ -382,7 +440,7 @@ def read_radar_data(file_name):
 	return (np.asarray(lat_pos), np.asarray(lng_pos),
 			np.asarray(lat_vel), np.asarray(lng_vel))
 
-def convert_radar_data(lat_pos, lng_pos):
+def convert_radar_data(lat_pos, lng_pos, lat_vel, lng_vel):
 	assert(lat_pos.shape[1] == 64 and lng_pos.shape[1] == 64)
 	assert(lat_pos.shape[0] == lng_pos.shape[0])
 	measurements = []
@@ -390,11 +448,17 @@ def convert_radar_data(lat_pos, lng_pos):
 	for time_step in range(0, lat_pos.shape[0]):
 #	for time_step in range(0, 3): #for shorter runtime timing
 		cur_time_step_meas = []
-		for i in range (0, lat_pos.shape[1]):
+#		for i in range (0, lat_pos.shape[1]):
+#		for i in range (54, 55): #subset of measurements per timestep
+		for i in range (50, 60): #subset of measurements per timestep
 			if((not math.isnan(lat_pos[time_step, i])) and \
-			   (not math.isnan(lng_pos[time_step, i]))):
-				cur_time_step_meas.append(np.array([lat_pos[time_step, i],
-													lng_pos[time_step, i]]))
+			   (not math.isnan(lat_vel[time_step, i])) and \
+			   (not math.isnan(lng_pos[time_step, i])) and \
+			   (not math.isnan(lng_vel[time_step, i]))):
+				cur_time_step_meas.append(np.array([lat_pos[time_step, i] * 1.5,
+													lat_vel[time_step, i],
+													lng_pos[time_step, i] * 1.5,
+													lng_vel[time_step, i] - 35.3]))
 		if(len(cur_time_step_meas) > 0):
 			measurements.append((time_stamp, cur_time_step_meas))
 
@@ -405,5 +469,11 @@ def convert_radar_data(lat_pos, lng_pos):
 
 
 (lat_pos, lng_pos, lat_vel, lng_vel) = read_radar_data('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/utils/radar_data.txt')
-measurements = convert_radar_data(lat_pos, lng_pos)
+measurements = convert_radar_data(lat_pos, lng_pos, lat_vel, lng_vel)
+
+fig = plt.figure()
+ax = fig.add_subplot(1, 1, 1)
+ax.scatter(lat_pos[:,54], lng_pos[:,54])
+plt.show()
+
 run_rbpf(measurements)

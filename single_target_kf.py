@@ -18,14 +18,16 @@ def pos_vel_filter(x, P, R, Q=0., dt=1.0):
     constant velocity model for a state [x dx].T
     """
     
-    kf = KalmanFilter(dim_x=4, dim_z=2)
+    kf = KalmanFilter(dim_x=4, dim_z=4)
     kf.x = np.array([x[0], x[1], x[2], x[3]]) # location and velocity
     kf.F = np.array([[1, dt,  0,  0],
                      [0,  1,  0,  0],
                      [0,  0,  1, dt],
                      [0,  0,  0,  1]])    # state transition matrix
-    kf.H = np.array([[1, 0, 0, 0],
-                     [0, 0, 1, 0]])     # Measurement function
+    kf.H = np.array([[1,  0,  0,  0],
+                     [0,  1,  0,  0],
+                     [0,  0,  1,  0],
+                     [0,  0,  0,  1]])     # Measurement function
 
 
     if np.isscalar(P):
@@ -173,7 +175,7 @@ def run(x0=(0.,0.,0.,0.), P=500, R=0, Q=0, dt=1.0, data=None):
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     ax.scatter(x_posteriors[:,0], x_posteriors[:, 2], marker = '+', c = cmap(1))
-    ax.scatter(data[:,0], data[:,1], marker = '*', c = cmap(99))
+    ax.scatter(data[:,0], data[:,2], marker = '*', c = cmap(99))
     plt.show()
 
     return x_posteriors, x_predictions, cov, kf.H, kf.R
@@ -189,7 +191,10 @@ if False:
 
 if True:
     P = np.diag([10., 5., 10., 5.])
-    log_likelihoods = run_EM_on_Q_R(R=1000, Q=.00010, P=P, data=np.concatenate((np.expand_dims(lat_pos[:,54], axis=1), np.expand_dims(lng_pos[:,54], axis=1)), axis=1))
+    log_likelihoods = run_EM_on_Q_R(R=1000, Q=.00010, P=P, data=np.concatenate((np.expand_dims(lat_pos[:,54], axis=1),
+                                                                                np.expand_dims(lat_vel[:,54], axis=1),
+                                                                                np.expand_dims(lng_pos[:,54], axis=1),
+                                                                                np.expand_dims(lng_vel[:,54], axis=1) - 35.3), axis=1))
     print log_likelihoods
     cmap = get_cmap(100)
     fig = plt.figure()
