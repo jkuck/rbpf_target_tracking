@@ -13,13 +13,17 @@ import random
 import copy 
 import math
 from numpy.linalg import inv
+import pickle
+import sys
+sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
+import clearmetrics
+
 
 PLOT = True
 DEBUG = False
 NUM_TARGETS = 6
 WITH_NOISE = True
 WITH_CLUTTER = True
-FIX_NUM_TARGETS_IN_MODEL = False
 
 #data generation parameters
 meas_sigma = .2
@@ -31,9 +35,9 @@ num_time_steps = 1500
 N_particles = 10 #number of particles used in the particle filter
 p_clutter_prior = .01 #probability of associating a measurement with clutter
 p_clutter_likelihood = 0.1
-#p_birth_global_prior = 0.01 #probability of associating a measurement with a new target
+#p_birth_prior = 0.01 #probability of associating a measurement with a new target
 #p_birth_likelihood = 0.035
-p_birth_global_prior = 0.0025 #probability of associating a measurement with a new target
+p_birth_prior = 0.0025 #probability of associating a measurement with a new target
 p_birth_likelihood = 0.1
 
 
@@ -55,6 +59,11 @@ Q_default = np.array([[1.0/3.0*default_time_step**3, 1.0/2.0*default_time_step**
  					  [1.0/2.0*default_time_step**2, default_time_step]])
 Q_default *= process_noise_spectral_density
 
+#process_noise_spectral_density = .1
+#Q_default = np.array([[1.0/3.0*default_time_step**3, 1.0/2.0*default_time_step**2],
+# 					  [1.0/2.0*default_time_step**2, default_time_step*100]])
+#Q_default *= process_noise_spectral_density
+
 #measurement function matrix
 H = np.array([[1,  0]])
 
@@ -75,6 +84,11 @@ min_pos = -5.0
 max_pos = 5.0
 min_vel = -1.0
 max_vel = 1.0
+
+#The maximum allowed distance for a ground truth target and estimated target
+#to be associated with each other when calculating MOTA and MOTP
+MAX_ASSOCIATION_DIST = 1
+
 
 def get_cmap(N):
     '''Returns a function that maps each index in 0, 1, ... N-1 to a distinct 
@@ -380,6 +394,7 @@ class Target:
 			self.x = np.array([[measurement], [0]])
 			self.P = P_default
 
+		assert(self.x.shape == (2, 1))
 		self.birth_time = cur_time
 		#Time of the last measurement data association with this target
 		self.last_measurement_association = cur_time
@@ -400,7 +415,7 @@ class Target:
 		- cur_time: time when the measurement was taken (float)
 !!!!!!!!!PREDICTION HAS BEEN RUN AT THE BEGINNING OF TIME STEP FOR EVERY TARGET!!!!!!!!!
 		"""
-
+		assert(self.x.shape == (2, 1))
 		S = np.dot(np.dot(H, self.P), H.T) + R_default
 		K = np.dot(np.dot(self.P, H.T), inv(S))
 		residual = measurement - np.dot(H, self.x)
@@ -410,13 +425,16 @@ class Target:
 		self.x = updated_x
 		self.P = updated_P
 		assert(self.all_time_stamps[-1] == cur_time and self.all_time_stamps[-2] != cur_time)
+		assert(self.x.shape == (2, 1)), (self.x.shape, np.dot(K, residual).shape)
+
 		self.all_states[-1] = self.x
 
-	def kf_predict(dt, cur_time):
+	def kf_predict(self, dt, cur_time):
 		"""
 		Run kalman filter prediction on this target
 		Inputs:
 			-dt: time step to run prediction on
+			-cur_time: the time the prediction is made for
 		"""
 		assert(self.all_time_stamps[-1] == (cur_time - dt))
 		F = np.array([[1, dt],
@@ -427,6 +445,8 @@ class Target:
 		self.P = P_predict
 		self.all_states.append(self.x)
 		self.all_time_stamps.append(cur_time)
+		assert(self.x.shape == (2, 1))
+
 
 	def data_gen_update_state(self, cur_time, F):
 		process_noise = np.random.multivariate_normal(np.zeros(Q_default.shape[0]), Q_default)
@@ -434,6 +454,7 @@ class Target:
 		self.x = np.dot(F, self.x) + process_noise 
 		self.all_states.append(self.x)
 		self.all_time_stamps.append(cur_time)
+		assert(self.x.shape == (2, 1))
 
 	def data_gen_measure_state(self, cur_time):
 		measurement_noise = np.random.multivariate_normal(np.zeros(R_default.shape[0]), R_default)
@@ -441,6 +462,8 @@ class Target:
 		measurement = np.dot(H, self.x) + measurement_noise
 		self.measurements.append(measurement)
 		self.measurement_time_stamps.append(cur_time)
+		assert(self.x.shape == (2, 1))
+
 		return measurement
 
 	def target_death_prob(self, cur_time, prev_time):
@@ -474,25 +497,74 @@ class Target:
 #		death_prob /= gdtrc(theta_death, alpha_death, cur_time - last_assoc)
 #		return death_prob
 
+
+class Measurement:
+	def __init__(self, val = 0, time = -1):
+		self.val = val
+		self.time = time
+
+class TargetSet:
+	"""
+	Contains ground truth states for all targets.  Also contains all generated measurements.
+	"""
+
+	def __init__(self):
+		self.living_targets = []
+		self.all_targets = [] #alive and dead targets
+
+		self.living_count = 0 #number of living targets
+		self.total_count = 0 #number of living targets plus number of dead targets
+		self.measurements = [] #generated measurements for a generative TargetSet 
+
+	def create_new_target(self, measurement, cur_time):
+		new_target = Target(cur_time, self.total_count, measurement[0])
+		self.living_targets.append(new_target)
+		self.all_targets.append(new_target)
+		self.living_count += 1
+		self.total_count += 1
+		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
+
+
+	def kill_target(self, living_target_index):
+		"""
+		Kill target self.living_targets[living_target_index], note that living_target_index
+		may not be the target's id_ (or index in all_targets)
+		"""
+		del self.living_targets[living_target_index]
+		self.living_count -= 1
+		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
+
+	def plot_all_target_locations(self, title):
+		fig = plt.figure()
+		ax = fig.add_subplot(1, 1, 1)
+		for i in range(self.total_count):
+			life = len(self.all_targets[i].all_states) #length of current targets life 
+			locations_1D =  [self.all_targets[i].all_states[j][0] for j in range(life)]
+			ax.plot(self.all_targets[i].all_time_stamps, locations_1D,
+					'-o', label='Target %d' % i)
+
+		legend = ax.legend(loc='lower left', shadow=True)
+		plt.title('%s, unique targets = %d, #targets alive = %d' % \
+			(title, self.total_count, self.living_count)) # subplot 211 title
+
+	def plot_generated_measurements(self):
+		fig = plt.figure()
+		ax = fig.add_subplot(1, 1, 1)
+		time_stamps = [self.measurements[i].time for i in range(len(self.measurements))]
+		locations = [self.measurements[i].val[0] for i in range(len(self.measurements))]
+		ax.plot(time_stamps, locations,'o')
+		plt.title('Generated Measurements') 
+
+
 class Particle:
 	def __init__(self, id_):
 		#Targets tracked by this particle
-		self.targets = [] 
+		self.targets = TargetSet()
 
 		#Previous measurement-target data associations for the current
 		#time instance (all data associations necessary for future decisions)
 		self.data_associations = [] 
 		self.importance_weight = 1.0/N_particles
-
-		#For displaying this particle's tracking results
-		#all_target_locations[i] contains target locations for this particle's
-		#target with id == i
-		#all_target_locations[i][0] is a list of time stamps for target i
-		#all_target_locations[i][1] is a list of locations for target i
-		self.all_target_locations = []
-
-		#assign a unique id to every target
-		self.next_target_id = 0
 
 		#for debugging
 		self.id_ = id_
@@ -501,17 +573,12 @@ class Particle:
 		self.pi_birth_debug = -1
 		self.pi_clutter_debug = -1
 		self.pi_targets_debug = []
-		self.p_birth_prior = p_birth_global_prior
 
 	def create_new_target(self, measurement, cur_time):
-		self.targets.append(Target(cur_time, self.next_target_id, measurement[0]))
+		self.targets.create_new_target(measurement, cur_time)
 
 		#associate measurement with newly created target
-		self.data_associations.append(len(self.targets) - 1) 
-		self.next_target_id += 1
-		self.all_target_locations.append(([], []))
-		if FIX_NUM_TARGETS_IN_MODEL and self.next_target_id == NUM_TARGETS:
-			self.p_birth_prior = 0
+		self.data_associations.append(self.targets.living_count - 1) 
 
 
 	#call this function before processing the first measurement of a new time
@@ -523,13 +590,13 @@ class Particle:
 	def assoc_prior(self, target_index):
 		if (target_index in self.data_associations):
 			return 0.0
-		elif (len(self.targets) == len(self.data_associations)):
+		elif (self.targets.living_count == len(self.data_associations)):
 			return 0.0
 		else:
-			return (1.0 - self.p_birth_prior)*(1 - p_clutter_prior)/(len(self.targets) - len(self.data_associations))
+			return (1.0 - p_birth_prior)*(1 - p_clutter_prior)/(self.targets.living_count - len(self.data_associations))
 
 	def update_target_death_probabilities(self, cur_time, prev_time):
-		for target in self.targets:
+		for target in self.targets.living_targets:
 			target.death_prob = target.target_death_prob(cur_time, prev_time)
 
 	def sample_target_deaths(self, cur_time, prev_time):
@@ -542,10 +609,10 @@ class Particle:
 		- prev_time: The previous time step when a measurement was received (float)
 
 		"""
-		original_num_targets = len(self.targets)
+		original_num_targets = self.targets.living_count
 		num_targets_killed = 0
 		indices_to_kill = []
-		for (index, cur_target) in enumerate(self.targets):
+		for (index, cur_target) in enumerate(self.targets.living_targets):
 			death_prob = cur_target.target_death_prob(cur_time, prev_time)
 			assert(death_prob < 1.0 and death_prob > 0.0)
 			if (random.random() < death_prob):
@@ -554,9 +621,9 @@ class Particle:
 
 		#important to delete largest index first to preserve values of the remaining indices
 		for index in reversed(indices_to_kill):
-			del self.targets[index]
+			self.targets.kill_target(index)
 
-		assert(len(self.targets) == (original_num_targets - num_targets_killed))
+		assert(self.targets.living_count == (original_num_targets - num_targets_killed))
 		#print "targets killed = ", num_targets_killed
 
 	#@profile
@@ -567,8 +634,8 @@ class Particle:
 		Output:
 		- c: The measurement-target association value.  Values of c correspond to:
 			c = -1 -> clutter
-			c = len(particle.targets) -> new target
-			c in range [0, len(particle.targets)-1] -> particle.targets[c]
+			c = self.targets.living_count -> new target
+			c in range [0, self.targets.living_count-1] -> particle.targets.living_targets[c]
 		- normalization: After processing this measurement the particle's
 			importance weight will be:
 			new_importance_weight = old_importance_weight * normalization
@@ -598,7 +665,7 @@ class Particle:
 
 		#get death probabilities for each target in a numpy array
 		death_probs = []
-		for target in self.targets:
+		for target in self.targets.living_targets:
 			death_probs.append(target.death_prob)
 			assert(death_probs[len(death_probs) - 1] >= 0 and death_probs[len(death_probs) - 1] <= 1)
 		#if we have no targets, create length one array containing a zero so cases 1 and 2 work out
@@ -606,7 +673,7 @@ class Particle:
 			death_probs.append(0)
 		death_probs = np.asarray(death_probs)
 
-		num_targ = len(self.targets)
+		num_targ = self.targets.living_count
 		event_priors = np.array([-9.0 for i in range(0, 2+2*num_targ+num_targ**2)])
 		event_likelihoods = np.array([-9.0 for i in range(0, 2+2*num_targ+num_targ**2)])
 		event_associations = np.array([-9 for i in range(0, 2+2*num_targ+num_targ**2)])
@@ -614,53 +681,53 @@ class Particle:
 
 		event_index = 0
 		#case 1: 0 deaths, c = clutter, 1 option
-		event_priors[event_index] = np.prod(1 - death_probs) * (1 - self.p_birth_prior)*p_clutter_prior
+		event_priors[event_index] = np.prod(1 - death_probs) * (1 - p_birth_prior)*p_clutter_prior
 		event_likelihoods[event_index] = p_clutter_likelihood
 		event_associations[event_index] = -1
 		event_deaths[event_index] = -1
 		event_index += 1
 
 		#case 2: 0 deaths, c = birth, 1 option
-		event_priors[event_index] = np.prod(1 - death_probs) * self.p_birth_prior / (1 + len(self.targets))
+		event_priors[event_index] = np.prod(1 - death_probs) * p_birth_prior / (1 + self.targets.living_count)
 		event_likelihoods[event_index] = p_birth_likelihood
-		event_associations[event_index] = len(self.targets)
+		event_associations[event_index] = self.targets.living_count
 		event_deaths[event_index] = -1
 		event_index += 1
 
 		#case 3: 0 deaths, c = current target association, T options
-		for i in range(0, len(self.targets)):
+		for i in range(self.targets.living_count):
 			event_priors[event_index] = np.prod(1 - death_probs) * self.assoc_prior(i)
-			event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets[i])
+			event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets.living_targets[i])
 			event_associations[event_index] = i
 			event_deaths[event_index] = -1
 			event_index += 1
 
 		#case 4: 1 death, c = clutter, T options
-		for i in range(0, len(self.targets)):
+		for i in range(self.targets.living_count):
 			event_priors[event_index] = np.prod(1 - death_probs)/(1 - death_probs[i])*death_probs[i] \
-										* (1 - self.p_birth_prior)*p_clutter_prior
+										* (1 - p_birth_prior)*p_clutter_prior
 			event_likelihoods[event_index] = p_clutter_likelihood
 			event_associations[event_index] = -1
 			event_deaths[event_index] = i
 			event_index += 1
 
 		#case 5: 1 death, c = birth, T options
-		for i in range(0, len(self.targets)):
+		for i in range(self.targets.living_count):
 			event_priors[event_index] = np.prod(1 - death_probs)/(1 - death_probs[i])*death_probs[i] \
-										* self.p_birth_prior / (1 + len(self.targets))
+										* p_birth_prior / (1 + self.targets.living_count)
 			event_likelihoods[event_index] = p_birth_likelihood
-			event_associations[event_index] = len(self.targets)
+			event_associations[event_index] = self.targets.living_count
 			event_deaths[event_index] = i
 			event_index += 1
 
 		#case 6: 1 death, c = current target association (not with the target that just died),
 		#		 T*(T-1) options
-		for death_index in range(0, len(self.targets)):
-			for assoc_index in range(0, len(self.targets)):
+		for death_index in range(self.targets.living_count):
+			for assoc_index in range(self.targets.living_count):
 				if(death_index != assoc_index):
 					event_priors[event_index] = np.prod(1 - death_probs)/(1 - death_probs[death_index]) \
-												* death_probs[death_index] * (1.0 - self.p_birth_prior)*(1 - p_clutter_prior)/(len(self.targets)-1)
-					event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets[assoc_index])
+												* death_probs[death_index] * (1.0 - p_birth_prior)*(1 - p_clutter_prior)/(self.targets.living_count-1)
+					event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets.living_targets[assoc_index])
 					event_associations[event_index] = assoc_index
 					event_deaths[event_index] = death_index
 					event_index += 1
@@ -722,15 +789,13 @@ class Particle:
 		#process c
 		new_target = False #debugging
 		#create new target
-		if(c == len(self.targets)):
+		if(c == self.targets.living_count):
 			self.create_new_target(measurement, cur_time)
-			self.store_target_location(time = cur_time, target = len(self.targets) - 1)
 			new_target = True 
 #			self.debug_target_creation(c, imprt_re_weight, pi_birth, pi_clutter, pi_targets)
 		#update the target corresponding to the association we have sampled
-		elif((c >= 0) and (c < len(self.targets))):
-			self.targets[c].kf_update(measurement, cur_time)
-			self.store_target_location(time = cur_time, target = c)
+		elif((c >= 0) and (c < self.targets.living_count)):
+			self.targets.living_targets[c].kf_update(measurement, cur_time)
 
 		else:
 			#otherwise the measurement was associated with clutter
@@ -738,8 +803,7 @@ class Particle:
 
 		#kill target if necessary
 		if(dead_target_ind != -1):
-			self.targets[:] = [self.targets[i] for i in range(len(self.targets)) if (i != dead_target_ind)]
-
+			self.targets.kill_target(dead_target_ind)
 #		#debugging
 #		self.c_debug = c 
 #		self.imprt_re_weight_debug = imprt_re_weight
@@ -749,24 +813,18 @@ class Particle:
 
 		return new_target
 
-	def store_target_location(self, time, target):
-		"""
-		Store the current location of the specified target for plotting/viewing
-		"""
-		target_id = self.targets[target].id_
-		self.all_target_locations[target_id][0].append(time)
-		self.all_target_locations[target_id][1].append(self.targets[target].kf.x[0])
-
 	def plot_all_target_locations(self):
 		fig = plt.figure()
 		ax = fig.add_subplot(1, 1, 1)
-		for i in range(0, self.next_target_id):
-			ax.plot(self.all_target_locations[i][0], self.all_target_locations[i][1],
+		for i in range(self.targets.total_count):
+			life = len(self.targets.all_targets[i].all_states) #length of current targets life 
+			locations_1D =  [self.targets.all_targets[i].all_states[j][0] for j in range(life)]
+			ax.plot(self.targets.all_targets[i].all_time_stamps, locations_1D,
 					'-o', label='Target %d' % i)
 
 		legend = ax.legend(loc='lower left', shadow=True)
 		plt.title('Particle %d, Importance Weight = %f, unique targets = %d, #targets alive = %d' % \
-			(self.id_, self.importance_weight, self.next_target_id, len(self.targets))) # subplot 211 title
+			(self.id_, self.importance_weight, self.targets.total_count, self.targets.living_count)) # subplot 211 title
 #		plt.show()
 
 
@@ -777,8 +835,11 @@ class Particle:
 #RUN PREDICTION FOR ALL TARGETS AT THE BEGINNING OF EACH TIME STEP!!!
 #@profile
 def assoc_likelihood(measurement, target):
-	S = np.dot(np.dot(target.kf.H, target.kf.P), target.kf.H.T) + target.kf.R
-	state_mean_meas_space = np.dot(target.kf.H, target.kf.x)
+	S = np.dot(np.dot(H, target.P), H.T) + R_default
+	assert(target.x.shape == (2, 1))
+
+	state_mean_meas_space = np.dot(H, target.x)
+
 	distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
 	return distribution.pdf(measurement)
 
@@ -817,14 +878,14 @@ def perform_resampling(particle_set):
 def display_target_counts(particle_set, cur_time):
 	target_counts = []
 	for particle in particle_set:
-		target_counts.append(len(particle.targets))
+		target_counts.append(particle.targets.living_count)
 	print target_counts
 
 	target_counts = []
 	importance_weights = []
 	for particle in particle_set:
 		cur_target_count = 0
-		for target in particle.targets:
+		for target in particle.targets.living_targets:
 			if (cur_time - target.birth_time) > min_target_age:
 				cur_target_count += 1
 		target_counts.append(cur_target_count)
@@ -873,13 +934,11 @@ def run_rbpf(all_measurements):
 			#update particle death probabilities
 			if(prev_time_stamp != -1):
 				particle.update_target_death_probabilities(time_stamp, prev_time_stamp)
-				#Run Kalman filter prediction for all targets
-				for target in particle.targets:
+				#Run Kalman filter prediction for all living targets
+				for target in particle.targets.living_targets:
 					dt = time_stamp - prev_time_stamp
 					assert(abs(dt - default_time_step) < .00000001), (dt, default_time_step)
- 					target.kf.F = np.array([[1, dt],
-		                 	  				[0,  1]])
-					target.kf.predict()
+					target.kf_predict(dt, time_stamp)
 		for measurement in measurements_at_cur_time:
 			new_target_list = [] #for debugging, list of booleans whether each particle created a new target
 			for particle in particle_set:
@@ -924,55 +983,168 @@ def run_rbpf(all_measurements):
 	print "resampling performed %d times" % number_resamplings
 
 
-def kf_update(x,P,measurement,H,R):
-	S = np.dot(np.dot(H, P), H.T) + R
-	K = np.dot(np.dot(P, H.T), inv(S))
-	residual = measurement - np.dot(H, x)
-	updated_x = x + np.dot(K, residual)
-#	updated_P = np.dot((np.eye(P.shape[0]) - np.dot(K, H)), P) #NUMERICALLY UNSTABLE!!!!!!!!
-	updated_P = P - np.dot(np.dot(K, S), K.T) #not sure if this is numerically stable!!
-	return(updated_x, updated_P)
+def run_rbpf_on_targetset(target_set):
+	"""
+	Measurement class designed to only have 1 measurement/time instance
+	Input:
+	- target_set: generated TargetSet containing generated measurements and ground truth
+	Output:
+	- max_weight_target_set: TargetSet from a (could be multiple with equal weight) maximum
+		importance weight particle after processing all measurements
+	"""
+	particle_set = []
+	for i in range(0, N_particles):
+		particle_set.append(Particle(i))
 
-def kf_predict(x, P, F, Q):
-	x_predict = np.dot(F, x)
-	P_predict = np.dot(np.dot(F, P), F.T) + Q
-	return(x_predict, P_predict)
+	prev_time_stamp = -1
 
-x = np.array([[0], [0]])
-P = P_default
-H = np.array([[1,  0]])
-F = np.array([[1, .01],
-	          [0,   1]])
-(x, P) = kf_update(x, P, 3, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3.4, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3.7, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3.6, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3.4, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3.7, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
-(x, P) = kf_update(x, P, 3.6, H, R_default)
-(x, P) = kf_predict(x, P, F, Q_default)
 
+	#for displaying results
+	time_stamps = []
+	positions = []
+
+	iter = 1 # for plotting only occasionally
+	number_resamplings = 0
+	for measurement_set in target_set.measurements:
+		time_stamp = measurement_set.time
+		print "time_stamp = ", time_stamp
+#		measurement = np.array([measurement_set.val])
+		measurement = measurement_set.val
+		for particle in particle_set:
+			#forget data associations from the previous time step
+			particle.clear_data_associations()
+			#update particle death probabilities
+			if(prev_time_stamp != -1):
+				particle.update_target_death_probabilities(time_stamp, prev_time_stamp)
+				#Run Kalman filter prediction for all living targets
+				for target in particle.targets.living_targets:
+					dt = time_stamp - prev_time_stamp
+					assert(abs(dt - default_time_step) < .00000001), (dt, default_time_step)
+					target.kf_predict(dt, time_stamp)
+#		for measurement in measurements_at_cur_time:
+#		ONLY PROCESSING ONE MEASUREMENT/TIME_STAMP
+		new_target_list = [] #for debugging, list of booleans whether each particle created a new target
+		for particle in particle_set:
+			new_target = particle.update_particle_with_measurement(measurement, time_stamp)
+			new_target_list.append(new_target)
+		normalize_importance_weights(particle_set)
+		#debugging
+		if DEBUG:
+			assert(len(new_target_list) == N_particles)
+			for (particle_number, new_target) in enumerate(new_target_list):
+				if new_target:
+					print "\n\n -------Particle %d created a new target-------" % particle_number
+					for particle in particle_set:
+						particle.debug_target_creation()
+					plt.show()
+					break
+			#done debugging
+
+		if iter%100 == 0:
+			print iter
+			display_target_counts(particle_set, time_stamp)
+
+
+		if (get_eff_num_particles(particle_set) < N_particles/4.0):
+			perform_resampling(particle_set)
+			print "resampled on iter: ", iter
+			number_resamplings += 1
+		prev_time_stamp = time_stamp
+
+
+
+		iter+=1
+
+	print "resampling performed %d times" % number_resamplings
+
+	max_imprt_weight = -1
+	for particle in particle_set:
+		if(particle.importance_weight > max_imprt_weight):
+			max_imprt_weight = particle.importance_weight
+	for particle in particle_set:
+		if(particle.importance_weight == max_imprt_weight):
+			max_weight_target_set = particle.targets
+
+	return max_weight_target_set
+
+
+def convert_to_clearmetrics_dictionary(target_set, all_time_stamps):
+	"""
+	Convert the locations of a TargetSet to clearmetrics dictionary format
+
+	Input:
+	- target_set: TargetSet to be converted
+
+	Output:
+	- target_dict: Converted locations in clearmetrics dictionary format
+	"""
+	target_dict = {}
+	for target in target_set.all_targets:
+		for t in all_time_stamps:
+			if target == target_set.all_targets[0]: #this is the first target
+				if t in target.all_time_stamps: #target exists at this time
+					target_dict[t] = [target.all_states[target.all_time_stamps.index(t)]]
+				else: #target doesn't exit at this time
+					target_dict[t] = [None]
+			else: #this isn't the first target
+				if t in target.all_time_stamps: #target exists at this time
+					target_dict[t].append(target.all_states[target.all_time_stamps.index(t)])
+				else: #target doesn't exit at this time
+					target_dict[t].append(None)
+	return target_dict
+
+def calc_tracking_performance(ground_truth_ts, estimated_ts):
+	"""
+	!!I think clearmetrics calculates #mismatches incorrectly, look into more!!
+	(has to do with whether a measurement can be mismatched to a target that doesn't exist at the current time)
+
+	Calculate MOTA and MOTP ("Evaluating Multiple Object Tracking Performance:
+	The CLEAR MOT Metrics", K. Bernardin and R. Stiefelhagen)
+
+	Inputs:
+	- ground_truth_ts: TargetSet containing ground truth target locations
+	- estimated_ts: TargetSet containing esimated target locations
+	"""
+
+	#convert TargetSets to dictionary format for calling clearmetrics
+
+	all_time_stamps = [ground_truth_ts.measurements[i].time for i in range(len(ground_truth_ts.measurements))]
+	ground_truth = convert_to_clearmetrics_dictionary(ground_truth_ts, all_time_stamps)
+	estimated_tracks = convert_to_clearmetrics_dictionary(estimated_ts, all_time_stamps)
+
+	clear = clearmetrics.ClearMetrics(ground_truth, estimated_tracks, MAX_ASSOCIATION_DIST)
+	clear.match_sequence()
+	evaluation = [clear.get_mota(),
+	              clear.get_motp(),
+	              clear.get_fn_count(),
+	              clear.get_fp_count(),
+	              clear.get_mismatches_count(),
+	              clear.get_object_count(),
+	              clear.get_matches_count()]
+	print 'MOTA, MOTP, FN, FP, mismatches, objects, matches'
+	print evaluation     
+	ground_truth_ts.plot_all_target_locations("Ground Truth")         
+	ground_truth_ts.plot_generated_measurements()    
+	estimated_ts.plot_all_target_locations("Estimated Tracks")      
+	plt.show()
+
+f = open("pickled_test_data.pickle", 'r')
+ground_truth_ts = pickle.load(f)
+f.close()
 print '-'*80
-print x
-print P
+print ground_truth_ts.measurements[0].time
+print ground_truth_ts.measurements[1].time
+print ground_truth_ts.measurements[2].time
+print ground_truth_ts.measurements[3].time
+estimated_ts = run_rbpf_on_targetset(ground_truth_ts)
+calc_tracking_performance(ground_truth_ts, estimated_ts)
 
-sleep(5)
 
-
-
-time_steps, x1, x2, x3, x4, x5, x6 = gen_orig_paper_data()
-#time_steps, x1, x2, x3, x4, x5, x6 = gen_lines()
-all_measurements = convert_data_to_rbpf_format_single_meas_per_time_step(time_steps, [x2, x1, x3, x4, x5, x6])
-#all_measurements = convert_data_to_rbpf_format_multiple_meas_per_time_step(time_steps, [x2, x1, x3, x4, x5, x6])
-plot_rbpf_formatted_data(all_measurements)
-
-run_rbpf(all_measurements)
+#time_steps, x1, x2, x3, x4, x5, x6 = gen_orig_paper_data()
+##time_steps, x1, x2, x3, x4, x5, x6 = gen_lines()
+#all_measurements = convert_data_to_rbpf_format_single_meas_per_time_step(time_steps, [x2, x1, x3, x4, x5, x6])
+##all_measurements = convert_data_to_rbpf_format_multiple_meas_per_time_step(time_steps, [x2, x1, x3, x4, x5, x6])
+#plot_rbpf_formatted_data(all_measurements)
+#
+#run_rbpf(all_measurements)
 

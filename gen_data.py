@@ -32,13 +32,15 @@ R_default = np.array([[meas_sigma**2]])
 F_default = np.array([[1, default_time_step],	# Transition matrix
 		      		  [0,  				  1]])
 H = np.array([[1,  0]])     			# Measurement function
+P_default = np.array([[meas_sigma**2, 0],
+ 					  [0,             1]])
 
 #Gamma distribution parameters for calculating target death probabilities
 alpha_death = 2.0
 beta_death = 1.0
 theta_death = 1.0/beta_death
 
-p_birth_prior = 0.004 #prior probability of a target birth
+p_birth_prior = 0.0025 #prior probability of a target birth
 
 p_clutter_prior = .01 #prior probability of clutter
 
@@ -50,7 +52,7 @@ max_vel = 1.0
 
 
 class Target:
-	def __init__(self, measurement = None, cur_time, id_):
+	def __init__(self, cur_time, id_, measurement = None):
 		if measurement is None: #for data generation
 			position = np.random.uniform(min_pos,max_pos)
 			velocity = np.random.uniform(min_vel,max_vel)
@@ -62,9 +64,11 @@ class Target:
 
 		self.birth_time = cur_time
 		#Time of the last measurement data association with this target
-		self.last_measurement_association_time = cur_time
+		self.last_measurement_association = cur_time
 		self.id_ = id_ #named id_ to avoid clash with built in id
 		self.death_prob = -1 #calculate at every time instance
+
+		self.is_alive = True
 
 		self.all_states = [self.x]
 		self.all_time_stamps = [cur_time]
@@ -166,7 +170,8 @@ class TargetSet:
 
 	def __init__(self):
 		self.living_targets = []
-		self.dead_targets = []
+		self.all_targets = [] #alive and dead targets
+
 		self.living_count = 0 #number of living targets
 		self.total_count = 0 #number of living targets plus number of dead targets
 		self.measurements = []
@@ -191,16 +196,19 @@ class TargetSet:
 			death_prob = self.living_targets[i].target_death_prob(cur_time, prev_time)
 			if(random.random() < death_prob): 
 				target_indices_to_kill.append(i)
-		#reverse indices to delete targets with larger indices first
+		#kill targets here
+		#reverse indices to delete targets with larger indices first (preserving
+		# the correct indices for remaining targets to kill)
 		for index_to_kill in reversed(target_indices_to_kill):
-			self.dead_targets.append(self.living_targets[index_to_kill])
+			self.living_targets[index_to_kill].is_alive = False
 			del self.living_targets[index_to_kill]
 		self.living_count -= len(target_indices_to_kill)
 		assert(len(self.living_targets) == self.living_count)
-		assert(self.living_count + len(self.dead_targets) == self.total_count)
 
 	def create_target(self, cur_time):
-		self.living_targets.append(Target(cur_time, self.total_count))
+		new_target = Target(cur_time, self.total_count)
+		self.living_targets.append(new_target)
+		self.all_targets.append(new_target)
 		self.living_count += 1
 		self.total_count += 1
 
@@ -288,6 +296,8 @@ def generate_1_meas_per_time_instance():
 	targets = TargetSet()
 
 	for i in range(num_time_steps):
+		for target in targets.living_targets:
+			assert(target.is_alive)
 		if(i != 0):
 			#sample target deaths
 			targets.kill_targets(i*default_time_step, (i-1)*default_time_step)
@@ -304,14 +314,14 @@ def generate_1_meas_per_time_instance():
 		#normlized probability distribution if there are no living targets
 		if(targets.living_count == 0):
 			normalization = sum(association_distribution)
-			for i in range(len(association_distribution)):
-				association_distribution[i] = float(association_distribution[i])/normalization
+			for j in range(len(association_distribution)):
+				association_distribution[j] = float(association_distribution[j])/normalization
 		assert(abs(sum(association_distribution) - 1.0) < .00000001), (targets.living_count, association_distribution)
 
 		# sample whether the measurement is a new target, clutter, or current target
 		sampled_index = np.random.choice(len(association_distribution), p=association_distribution)
 		targets.create_measurement(sampled_index, i*default_time_step)
-
+		assert(len(targets.all_targets) == targets.total_count)
 
 	return targets
 
@@ -319,9 +329,16 @@ def generate_1_meas_per_time_instance():
 
 
 targets = generate_1_meas_per_time_instance()
+print '-'*80
+print targets.measurements[0].time
+print targets.measurements[1].time
+print targets.measurements[2].time
+print targets.measurements[3].time
+print '-'*80
+
 targets.pickle_data("pickled_test_data.pickle")
 f = open("pickled_test_data.pickle", 'r')
-loaded_targets = copy.deepcopy(targets)
+loaded_targets = pickle.load(f)
 f.close()
 
 print targets
@@ -341,7 +358,7 @@ for i in range(10):
 
 print isinstance(targets, loaded_targets.__class__)
 print (targets.__dict__ == loaded_targets.__dict__)
-print "Are targets and loaded targets equal? : ", (targets == targets)
+print "Are targets and loaded targets equal? : ", (targets == loaded_targets)
 loaded_targets.living_targets[0].x[0] += .03
 print "Are targets and loaded targets equal after changing loaded_targets? : ", (targets == loaded_targets)
 
