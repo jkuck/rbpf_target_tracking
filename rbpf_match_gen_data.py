@@ -19,6 +19,18 @@ sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 import clearmetrics
 
 
+#RBPF algorithmic paramters
+N_PARTICLES = 10 #number of particles used in the particle filter
+RESAMPLE_RATIO = 1.0001 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
+
+#algorithmic approximation parameters
+
+#if true, sample target deaths before data associations
+SAMPLE_DEATH_INDEPENDENTLY = False
+#should event priors be normalized in sample_data_assoc_and_death
+#when SAMPLE_DEATH_INDEPENDENTLY = False?
+NORMALIZE_EVENT_PRIORS = False
+
 PLOT = True
 DEBUG = False
 NUM_TARGETS = 6
@@ -32,7 +44,6 @@ meas_sigma = .2
 default_time_step = .01 
 num_time_steps = 1500
 
-N_particles = 10 #number of particles used in the particle filter
 p_clutter_prior = .01 #probability of associating a measurement with clutter
 p_clutter_likelihood = 0.1
 #p_birth_prior = 0.01 #probability of associating a measurement with a new target
@@ -564,7 +575,7 @@ class Particle:
 		#Previous measurement-target data associations for the current
 		#time instance (all data associations necessary for future decisions)
 		self.data_associations = [] 
-		self.importance_weight = 1.0/N_particles
+		self.importance_weight = 1.0/N_PARTICLES
 
 		#for debugging
 		self.id_ = id_
@@ -587,22 +598,27 @@ class Particle:
 		self.data_associations = []
 
 	#return p(c_k,l = target_index | c_k,1:l-1)
+	#FIX BEFORE USING, currently only using 1 measurement/time_stamp, more complicated than this with multiple
+	#measurements I think
 	def assoc_prior(self, target_index):
 		if (target_index in self.data_associations):
 			return 0.0
 		elif (self.targets.living_count == len(self.data_associations)):
 			return 0.0
 		else:
-			return (1.0 - p_birth_prior)*(1 - p_clutter_prior)/(self.targets.living_count - len(self.data_associations))
+			return (1.0 - p_birth_prior - p_clutter_prior)/(self.targets.living_count - len(self.data_associations))
 
 	def update_target_death_probabilities(self, cur_time, prev_time):
 		for target in self.targets.living_targets:
 			target.death_prob = target.target_death_prob(cur_time, prev_time)
 
-	def sample_target_deaths(self, cur_time, prev_time):
+	def sample_target_deaths(self):
 		"""
-		Implemented to kill possibly kill multiple targets at once, seems
+
+		Implemented to possibly kill multiple targets at once, seems
 		reasonbale but CHECK TECHNICAL DETAILS!!
+
+		death_prob for every target should have already been calculated!!
 
 		Input:
 		- cur_time: The current measurement time (float)
@@ -613,7 +629,7 @@ class Particle:
 		num_targets_killed = 0
 		indices_to_kill = []
 		for (index, cur_target) in enumerate(self.targets.living_targets):
-			death_prob = cur_target.target_death_prob(cur_time, prev_time)
+			death_prob = cur_target.death_prob
 			assert(death_prob < 1.0 and death_prob > 0.0)
 			if (random.random() < death_prob):
 				indices_to_kill.append(index)
@@ -625,6 +641,82 @@ class Particle:
 
 		assert(self.targets.living_count == (original_num_targets - num_targets_killed))
 		#print "targets killed = ", num_targets_killed
+
+	def sample_data_assoc(self, measurement):
+		"""
+		Sample only data association (target deaths have already been independently sampled)
+		Input:
+
+		Output:
+		- c: The measurement-target association value.  Values of c correspond to:
+			c = -1 -> clutter
+			c = self.targets.living_count -> new target
+			c in range [0, self.targets.living_count-1] -> particle.targets.living_targets[c]
+		- normalization: After processing this measurement the particle's
+			importance weight will be:
+			new_importance_weight = old_importance_weight * normalization
+
+		Cases (T = number of targets):
+			1: c = clutter
+				-1 option
+
+			2: c = birth
+				-1 option
+
+			3: c = current target association
+				-T options
+		"""
+
+		num_targ = self.targets.living_count
+		event_priors = np.array([-9.0 for i in range(0, 2+num_targ)])
+		event_likelihoods = np.array([-9.0 for i in range(0, 2+num_targ)])
+		event_associations = np.array([-9 for i in range(0, 2+num_targ)])
+
+		event_index = 0
+		#case 1: c = clutter, 1 option
+		event_priors[event_index] = p_clutter_prior
+		event_likelihoods[event_index] = p_clutter_likelihood
+		event_associations[event_index] = -1
+		event_index += 1
+
+		#case 2: c = birth, 1 option
+		event_priors[event_index] = p_birth_prior 
+		event_likelihoods[event_index] = p_birth_likelihood
+		event_associations[event_index] = self.targets.living_count
+		event_index += 1
+
+		#case 3: c = current target association, T options
+		for i in range(self.targets.living_count):
+			event_priors[event_index] = (1.0 - p_birth_prior - p_clutter_prior) \
+										/(self.targets.living_count)
+			event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets.living_targets[i])
+			event_associations[event_index] = i
+			event_index += 1
+
+		assert(event_index == 2+num_targ)
+
+		#normalize event priors (as in generative model) when no living targets
+		if(self.targets.living_count == 0):
+			prior_normalization = np.sum(event_priors)
+			event_priors /= prior_normalization
+			assert(abs(np.sum(event_priors) - 1.0 < .000001))
+		#if there are living targets, priors should already be normalized
+		else:
+			assert(abs(np.sum(event_priors) - 1.0 < .000001))
+
+		pi_distribution = event_priors*event_likelihoods
+		normalization = np.sum(pi_distribution)
+		pi_distribution /= normalization
+		assert(abs(np.sum(pi_distribution) - 1.0 < .000001))
+
+		#now sample from the importance distribution
+		sampled_index = np.random.choice(len(pi_distribution), p=pi_distribution)
+
+		assert(abs(normalization - event_likelihoods[sampled_index]*event_priors[sampled_index]/pi_distribution[sampled_index]) < .000001)
+		return (event_associations[sampled_index], normalization)
+
+
+
 
 	#@profile
 	def sample_data_assoc_and_death(self, measurement):
@@ -681,14 +773,14 @@ class Particle:
 
 		event_index = 0
 		#case 1: 0 deaths, c = clutter, 1 option
-		event_priors[event_index] = np.prod(1 - death_probs) * (1 - p_birth_prior)*p_clutter_prior
+		event_priors[event_index] = np.prod(1 - death_probs) * p_clutter_prior
 		event_likelihoods[event_index] = p_clutter_likelihood
 		event_associations[event_index] = -1
 		event_deaths[event_index] = -1
 		event_index += 1
 
 		#case 2: 0 deaths, c = birth, 1 option
-		event_priors[event_index] = np.prod(1 - death_probs) * p_birth_prior / (1 + self.targets.living_count)
+		event_priors[event_index] = np.prod(1 - death_probs) * p_birth_prior 
 		event_likelihoods[event_index] = p_birth_likelihood
 		event_associations[event_index] = self.targets.living_count
 		event_deaths[event_index] = -1
@@ -696,7 +788,8 @@ class Particle:
 
 		#case 3: 0 deaths, c = current target association, T options
 		for i in range(self.targets.living_count):
-			event_priors[event_index] = np.prod(1 - death_probs) * self.assoc_prior(i)
+			event_priors[event_index] = np.prod(1 - death_probs)*(1.0 - p_birth_prior - p_clutter_prior) \
+										/(self.targets.living_count)
 			event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets.living_targets[i])
 			event_associations[event_index] = i
 			event_deaths[event_index] = -1
@@ -705,7 +798,7 @@ class Particle:
 		#case 4: 1 death, c = clutter, T options
 		for i in range(self.targets.living_count):
 			event_priors[event_index] = np.prod(1 - death_probs)/(1 - death_probs[i])*death_probs[i] \
-										* (1 - p_birth_prior)*p_clutter_prior
+										*p_clutter_prior
 			event_likelihoods[event_index] = p_clutter_likelihood
 			event_associations[event_index] = -1
 			event_deaths[event_index] = i
@@ -714,7 +807,7 @@ class Particle:
 		#case 5: 1 death, c = birth, T options
 		for i in range(self.targets.living_count):
 			event_priors[event_index] = np.prod(1 - death_probs)/(1 - death_probs[i])*death_probs[i] \
-										* p_birth_prior / (1 + self.targets.living_count)
+										* p_birth_prior
 			event_likelihoods[event_index] = p_birth_likelihood
 			event_associations[event_index] = self.targets.living_count
 			event_deaths[event_index] = i
@@ -726,7 +819,9 @@ class Particle:
 			for assoc_index in range(self.targets.living_count):
 				if(death_index != assoc_index):
 					event_priors[event_index] = np.prod(1 - death_probs)/(1 - death_probs[death_index]) \
-												* death_probs[death_index] * (1.0 - p_birth_prior)*(1 - p_clutter_prior)/(self.targets.living_count-1)
+												* death_probs[death_index] \
+												* (1.0 - p_birth_prior - p_clutter_prior) \
+												/(self.targets.living_count-1)
 					event_likelihoods[event_index] = assoc_likelihood(measurement, self.targets.living_targets[assoc_index])
 					event_associations[event_index] = assoc_index
 					event_deaths[event_index] = death_index
@@ -734,33 +829,24 @@ class Particle:
 
 		assert(event_index == 2+2*num_targ+num_targ**2)
 
-#		I don't think normalizing priors makes sense, but think about it some more!!
-#		prior_normalization = np.sum(event_priors)
-#		event_priors /= prior_normalization
-#		assert(abs(np.sum(event_priors) - 1.0 < .000001))
+		#always normalize event priors (as in generative model) when no living targets
+		if(self.targets.living_count == 0):
+			prior_normalization = np.sum(event_priors)
+			event_priors /= prior_normalization
+			assert(abs(np.sum(event_priors) - 1.0 < .000001))
+		elif(NORMALIZE_EVENT_PRIORS):
+			prior_normalization = np.sum(event_priors)
+			event_priors /= prior_normalization
+			assert(abs(np.sum(event_priors) - 1.0 < .000001))
 
 		pi_distribution = event_priors*event_likelihoods
 		normalization = np.sum(pi_distribution)
 		pi_distribution /= normalization
 		assert(abs(np.sum(pi_distribution) - 1.0 < .000001))
 
-		#now sample from the optimal importance distribution
-#		sampled_index = -99
-#		rand_val = random.random()
-#
-#		index = 0
-#		for i in range(0, len(pi_distribution)):
-#			if(rand_val < pi_distribution[i]):
-#				sampled_index = i
-#				break
-#			else:
-#				rand_val -= pi_distribution[i]
-#			index += 1
-#		assert((rand_val > 0.0) and (sampled_index != -99)), (rand_val, sampled_index, index, pi_distribution, event_priors, event_likelihoods)
-
+		#now sample from the importance distribution
 		sampled_index = np.random.choice(len(pi_distribution), p=pi_distribution)
 
-		assert(abs(sum(pi_distribution) - 1.0) < .0000001)
 		assert(abs(normalization - event_likelihoods[sampled_index]*event_priors[sampled_index]/pi_distribution[sampled_index]) < .000001)
 		return (event_associations[sampled_index], event_deaths[sampled_index], normalization)
 #		return (event_associations[sampled_index], event_deaths[sampled_index], event_likelihoods[sampled_index]*event_priors[sampled_index]/pi_distribution[sampled_index])
@@ -779,37 +865,54 @@ class Particle:
 		Debugging output:
 		- new_target: True if a new target was created
 		"""
-
-		#sample data association from targets
-		#(c, imprt_re_weight) = self.sample_data_assoc_and_death(measurement)
-		(c, dead_target_ind, imprt_re_weight) = self.sample_data_assoc_and_death(measurement)
-		#update the particles importance weight
-		self.importance_weight *= imprt_re_weight
-
-		#process c
 		new_target = False #debugging
-		#create new target
-		if(c == self.targets.living_count):
-			self.create_new_target(measurement, cur_time)
-			new_target = True 
-#			self.debug_target_creation(c, imprt_re_weight, pi_birth, pi_clutter, pi_targets)
-		#update the target corresponding to the association we have sampled
-		elif((c >= 0) and (c < self.targets.living_count)):
-			self.targets.living_targets[c].kf_update(measurement, cur_time)
+
+		if(SAMPLE_DEATH_INDEPENDENTLY):
+			self.sample_target_deaths()
+
+			#sample data association from targets
+			(c, imprt_re_weight) = self.sample_data_assoc(measurement)
+			#update the particles importance weight
+			self.importance_weight *= imprt_re_weight
+
+			#process c
+			#create new target
+			if(c == self.targets.living_count):
+				self.create_new_target(measurement, cur_time)
+				new_target = True 
+	#			self.debug_target_creation(c, imprt_re_weight, pi_birth, pi_clutter, pi_targets)
+			#update the target corresponding to the association we have sampled
+			elif((c >= 0) and (c < self.targets.living_count)):
+				self.targets.living_targets[c].kf_update(measurement, cur_time)
+
+			else:
+				#otherwise the measurement was associated with clutter
+				assert(c == -1), ("c = ", c)
 
 		else:
-			#otherwise the measurement was associated with clutter
-			assert(c == -1), ("c = ", c)
 
-		#kill target if necessary
-		if(dead_target_ind != -1):
-			self.targets.kill_target(dead_target_ind)
-#		#debugging
-#		self.c_debug = c 
-#		self.imprt_re_weight_debug = imprt_re_weight
-#		self.pi_birth_debug = pi_birth
-#		self.pi_clutter_debug = pi_clutter
-#		self.pi_targets_debug = pi_targets
+			#sample data association from targets
+			(c, dead_target_ind, imprt_re_weight) = self.sample_data_assoc_and_death(measurement)
+			#update the particles importance weight
+			self.importance_weight *= imprt_re_weight
+
+			#process c
+			#create new target
+			if(c == self.targets.living_count):
+				self.create_new_target(measurement, cur_time)
+				new_target = True 
+	#			self.debug_target_creation(c, imprt_re_weight, pi_birth, pi_clutter, pi_targets)
+			#update the target corresponding to the association we have sampled
+			elif((c >= 0) and (c < self.targets.living_count)):
+				self.targets.living_targets[c].kf_update(measurement, cur_time)
+
+			else:
+				#otherwise the measurement was associated with clutter
+				assert(c == -1), ("c = ", c)
+
+			#kill target if necessary
+			if(dead_target_ind != -1):
+				self.targets.kill_target(dead_target_ind)
 
 		return new_target
 
@@ -852,7 +955,7 @@ def normalize_importance_weights(particle_set):
 
 
 def perform_resampling(particle_set):
-	assert(len(particle_set) == N_particles)
+	assert(len(particle_set) == N_PARTICLES)
 	weights = []
 	for particle in particle_set:
 		weights.append(particle.importance_weight)
@@ -864,14 +967,14 @@ def perform_resampling(particle_set):
 		new_particle_set.append(copy.deepcopy(particle_set[index]))
 	del particle_set[:]
 	for particle in new_particle_set:
-		particle.importance_weight = 1.0/N_particles
+		particle.importance_weight = 1.0/N_PARTICLES
 		particle_set.append(particle)
-	assert(len(particle_set) == N_particles)
+	assert(len(particle_set) == N_PARTICLES)
 	#testing
 	weights = []
 	for particle in particle_set:
 		weights.append(particle.importance_weight)
-		assert(particle.importance_weight == 1.0/N_particles)
+		assert(particle.importance_weight == 1.0/N_PARTICLES)
 	assert(abs(sum(weights) - 1.0) < .01), sum(weights)
 	#done testing
 
@@ -915,7 +1018,7 @@ def run_rbpf(all_measurements):
 	Output:
 	"""
 	particle_set = []
-	for i in range(0, N_particles):
+	for i in range(0, N_PARTICLES):
 		particle_set.append(Particle(i))
 
 	prev_time_stamp = -1
@@ -947,7 +1050,7 @@ def run_rbpf(all_measurements):
 			normalize_importance_weights(particle_set)
 			#debugging
 			if DEBUG:
-				assert(len(new_target_list) == N_particles)
+				assert(len(new_target_list) == N_PARTICLES)
 				for (particle_number, new_target) in enumerate(new_target_list):
 					if new_target:
 						print "\n\n -------Particle %d created a new target-------" % particle_number
@@ -962,7 +1065,7 @@ def run_rbpf(all_measurements):
 			display_target_counts(particle_set, time_stamp)
 
 
-		if (get_eff_num_particles(particle_set) < N_particles/4.0):
+		if (get_eff_num_particles(particle_set) < N_PARTICLES/RESAMPLE_RATIO):
 			perform_resampling(particle_set)
 			print "resampled on iter: ", iter
 			number_resamplings += 1
@@ -993,7 +1096,7 @@ def run_rbpf_on_targetset(target_set):
 		importance weight particle after processing all measurements
 	"""
 	particle_set = []
-	for i in range(0, N_particles):
+	for i in range(0, N_PARTICLES):
 		particle_set.append(Particle(i))
 
 	prev_time_stamp = -1
@@ -1030,7 +1133,7 @@ def run_rbpf_on_targetset(target_set):
 		normalize_importance_weights(particle_set)
 		#debugging
 		if DEBUG:
-			assert(len(new_target_list) == N_particles)
+			assert(len(new_target_list) == N_PARTICLES)
 			for (particle_number, new_target) in enumerate(new_target_list):
 				if new_target:
 					print "\n\n -------Particle %d created a new target-------" % particle_number
@@ -1045,7 +1148,7 @@ def run_rbpf_on_targetset(target_set):
 			display_target_counts(particle_set, time_stamp)
 
 
-		if (get_eff_num_particles(particle_set) < N_particles/4.0):
+		if (get_eff_num_particles(particle_set) < N_PARTICLES/4.0):
 			perform_resampling(particle_set)
 			print "resampled on iter: ", iter
 			number_resamplings += 1
