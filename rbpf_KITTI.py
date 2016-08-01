@@ -17,6 +17,9 @@ import pickle
 import sys
 sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 import clearmetrics
+sys.path.insert(0, "./KITTI_helpers")
+from learn_params1 import get_clutter_probabilities_score_range_wrapper
+
 
 import cProfile
 
@@ -65,7 +68,13 @@ if MULTIPLE_MEAS_PER_TIME:
 
 
 	#regionlet detection with score > 2.0:
-	CLUTTER_COUNT_PRIOR = [0.9121932992900735 - .001, 0.08045833852285465, 0.006850168140490721, 0.0004981940465811433, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+	#CLUTTER_COUNT_PRIOR = [0.9121932992900735 - .001, 0.08045833852285465, 0.006850168140490721, 0.0004981940465811433, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+	
+	#detections associated with don't care regions are counted as clutter
+	#CLUTTER_COUNT_PRIOR = [0.7860256569933989, 0.17523975588491716 - .001, 0.031635321957902605, 0.004857391954166148, 0.0016191306513887158, 0.0003736455349358575, 0.00024909702329057166, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+
+	CLUTTER_COUNT_PRIOR = get_clutter_probabilities_score_range_wrapper("regionlets")
+
 	P_TARGET_EMISSION = 0.813482 
 	#DEATH_PROBABILITIES = [-99, 0.1558803061934586, 0.24179829890643986, 0.1600831600831601, 0.10416666666666667, 0.08835341365461848, 0.04081632653061224, 0.06832298136645963, 0.06201550387596899, 0.04716981132075472, 0.056818181818181816, 0.013333333333333334, 0.028985507246376812, 0.03278688524590164, 0.0, 0.0, 0.0, 0.05, 0.0, 0.0625, 0.03571428571428571, 0.0, 0.0, 0.043478260869565216, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 	BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425, 0.2222222222222222, 0.35714285714285715, 0.2222222222222222, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -520,7 +529,7 @@ class Particle:
 		num_targ = self.targets.living_count
 
 		hidden_state_possibilities = enumerate_death_and_assoc_possibilities(num_targ, len(measurement_list),
-										death_probs, P_TARGET_EMISSION, BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+										death_probs, P_TARGET_EMISSION, BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR[len(measurement_list)])
 
 
 		#create the importance distribution
@@ -647,6 +656,9 @@ class Particle:
 		list_of_measurement_associations = []
 		proposal_probability = 1.0
 
+		#clutter count prior given the number of measurements we observed
+		cur_clutter_count_prior = CLUTTER_COUNT_PRIOR[len(measurement_list)]
+
 		#sample measurement associations
 		birth_count = 0
 		clutter_count = 0
@@ -676,8 +688,8 @@ class Particle:
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
-			for i in range(clutter_count+1, min(len(CLUTTER_COUNT_PRIOR), remaining_meas_count + clutter_count + 1)):
-				cur_clutter_prior += CLUTTER_COUNT_PRIOR[i]*(i - clutter_count)/remaining_meas_count 
+			for i in range(clutter_count+1, min(len(cur_clutter_count_prior), remaining_meas_count + clutter_count + 1)):
+				cur_clutter_prior += cur_clutter_count_prior[i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
@@ -804,7 +816,7 @@ class Particle:
 			prior /= math.factorial(len(measurement_list)) / \
 					 math.factorial(len(measurement_list) - len(cur_vis_targets))
 			prior *= memoized_birth_clutter_prior(len(cur_vis_targets), len(measurement_list),
-												  BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+												  BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR[len(measurement_list)])
 			association_priors[idx] = prior
 
 			assert (p_clutter_likelihood == p_birth_likelihood)
@@ -834,7 +846,7 @@ class Particle:
 		#sample clutter and birth counts
 		(sampled_birth_count, sampled_clutter_count, birth_clutter_prob) = \
 			sample_birth_clutter_counts(sampled_num_vis_targets, len(measurement_list), 
-										BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+										BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR[len(measurement_list)])
 		#randomly assign unassociated measurements to birth or clutter
 		if(len(measurement_list) > len(sampled_target_associations[1])):
 			remaining_meas_indices = []
@@ -920,7 +932,7 @@ class Particle:
 			birth_prior = self.get_clutter_or_birth_proposal1_prior(birth_assoc_count, len(measurement_list), BIRTH_COUNT_PRIOR)
 			proposal_dict[(meas_index, total_target_count)] = (p_birth_likelihood, birth_prior)
 			#add measurement-clutter association probability to proposal distribution
-			clutter_prior = self.get_clutter_or_birth_proposal1_prior(clutter_assoc_count, len(measurement_list), CLUTTER_COUNT_PRIOR)
+			clutter_prior = self.get_clutter_or_birth_proposal1_prior(clutter_assoc_count, len(measurement_list), CLUTTER_COUNT_PRIOR[len(measurement_list)])
 			proposal_dict[(meas_index, -1)] = (p_clutter_likelihood, clutter_prior)
 
 		for i in range(len(measurement_list)):
@@ -961,7 +973,7 @@ class Particle:
 					birth_prior = self.get_clutter_or_birth_proposal1_prior(birth_assoc_count, len(measurement_list), BIRTH_COUNT_PRIOR)
 					proposal_dict[(meas_index, total_target_count)] = (p_birth_likelihood, birth_prior)
 				elif(sampled_assoc_ind == -1 and assoc_index == -1): #update clutter probabilities
-					clutter_prior = self.get_clutter_or_birth_proposal1_prior(clutter_assoc_count, len(measurement_list), CLUTTER_COUNT_PRIOR)
+					clutter_prior = self.get_clutter_or_birth_proposal1_prior(clutter_assoc_count, len(measurement_list), CLUTTER_COUNT_PRIOR[len(measurement_list)])
 					proposal_dict[(meas_index, -1)] = (p_clutter_likelihood, clutter_prior)
 			#actually delete these entries now that we done iterating over the dictionary
 			for key in proposal_dict_keys_to_del:
@@ -1031,7 +1043,7 @@ class Particle:
 
 		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
 				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
-								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR[len(measurement_list)])
 		prior = hidden_state.total_prior
 		return prior
 
@@ -1064,7 +1076,7 @@ class Particle:
 
 		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
 				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
-								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR[len(measurement_list)])
 		prior = hidden_state.total_prior
 		likelihood = 1.0
 		assert(len(measurement_associations) == len(measurement_list))
