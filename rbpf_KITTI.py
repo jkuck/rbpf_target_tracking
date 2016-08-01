@@ -20,6 +20,9 @@ import clearmetrics
 
 import cProfile
 
+#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
+MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
+
 #RBPF algorithmic paramters
 N_PARTICLES = 100 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
@@ -49,14 +52,24 @@ if MULTIPLE_MEAS_PER_TIME:
 	from proposal2_helper import memoized_birth_clutter_prior
 	from proposal2_helper import sample_birth_clutter_counts
 	from proposal2_helper import sample_target_deaths_proposal2
-	P_TARGET_EMISSION = 0.830221
+	#P_TARGET_EMISSION = 0.830221
 	BIRTH_COUNT_PRIOR = [0.9371030016191306, 0.0528085689376012, 0.007223813675426578, 0.0016191306513887158, 0.000747291069871715, 0.00012454851164528583, 0, 0.00012454851164528583, 0.00012454851164528583, 0, 0, 0, 0, 0.00012454851164528583]
-#	CLUTTER_COUNT_PRIOR = [0.8459334910947814, 0.13314235894881057, 0.017934985676921162, 0.0028646157678415742, 0.00012454851164528583]
-	CLUTTER_COUNT_PRIOR = [0.8459334910947814 - .001, 0.13314235894881057, 0.017934985676921162, 0.0028646157678415742, 0.00012454851164528583, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
-
+	#CLUTTER_COUNT_PRIOR = [0.8459334910947814 - .001, 0.13314235894881057, 0.017934985676921162, 0.0028646157678415742, 0.00012454851164528583, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
 
 #	CLUTTER_COUNT_PRIOR = [.24,.25,.25,.25, .001, .001, .001, .001, .001,.001, .001, .001, .001, .001]	
 #	CLUTTER_COUNT_PRIOR = [1.0/7 - .01,1.0/7,1.0/7,1.0/7,1.0/7,1.0/7,1.0/7, .001, .001, .001, .001, .001,.001, .001, .001, .001, .001]
+	
+	#LSVM detection with score > 0.0:
+#	CLUTTER_COUNT_PRIOR = [0.8783161041225558 - .001, 0.11508282476024412, 0.006102877070619006, 0.0004981940465811433, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+#	P_TARGET_EMISSION = 0.635704
+
+
+	#regionlet detection with score > 2.0:
+	CLUTTER_COUNT_PRIOR = [0.9121932992900735 - .001, 0.08045833852285465, 0.006850168140490721, 0.0004981940465811433, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+	P_TARGET_EMISSION = 0.813482 
+	#DEATH_PROBABILITIES = [-99, 0.1558803061934586, 0.24179829890643986, 0.1600831600831601, 0.10416666666666667, 0.08835341365461848, 0.04081632653061224, 0.06832298136645963, 0.06201550387596899, 0.04716981132075472, 0.056818181818181816, 0.013333333333333334, 0.028985507246376812, 0.03278688524590164, 0.0, 0.0, 0.0, 0.05, 0.0, 0.0625, 0.03571428571428571, 0.0, 0.0, 0.043478260869565216, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425, 0.2222222222222222, 0.35714285714285715, 0.2222222222222222, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035, 0.02247191011235955, 0.04081632653061224, 0.05, 0.05, 0.036585365853658534, 0.013888888888888888, 0.030303030303030304, 0.03389830508474576, 0.0, 0.0, 0.0, 0.05128205128205128, 0.0, 0.06451612903225806, 0.037037037037037035, 0.0, 0.0, 0.045454545454545456, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 else:
 	p_clutter_prior = .01 #probability of associating a measurement with clutter
 	#p_birth_prior = 0.01 #probability of associating a measurement with a new target
@@ -75,26 +88,42 @@ P_default = np.array([[57.54277774, 0, 			 0, 0],
  					  [0, 			0, 			 0, 3]])
 
 
-R_default = np.array([[ 57.54277774,  -0.29252698],
- 					  [ -0.29252698,  17.86392672]])
-#Q_default = np.array([[ 0.04227087,  0.02025365],
-# 					  [ 0.02025365,  0.00985709]])
-#Q_default = Q_default/20.0 #just from testing seems to give good RMSE with clutter
+#R_default = np.array([[ 57.54277774,  -0.29252698],
+# 					  [ -0.29252698,  17.86392672]])
 
-Q_default = np.array([[ 4917.78662713,  3336.53175788,   -94.48073544,  -302.62308433],
- 					  [ 3336.53175788,  2263.78888015,   -62.84142363,  -204.57484619],
- 					  [  -94.48073544,   -62.84142363,    22.04172686,    17.75195215],
- 					  [ -302.62308433,  -204.57484619,    17.75195215,    25.6695776 ]])
+#regionlet detection with score > 2.0:
+R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+ 					  [ -3.60666228e-02,   1.64772050e+01]])
 
-#process_noise_spectral_density = .1
-#Q_default = np.array([[1.0/3.0*default_time_step**3, 1.0/2.0*default_time_step**2],
-# 					  [1.0/2.0*default_time_step**2, default_time_step*100]])
-#Q_default *= process_noise_spectral_density
+#learned only from GT locations associated with a regionlet detection with score > 2.0
+#Q_default = np.array([[ 175.93491484,  202.62608043,   -5.35815108,  -16.8599094 ],
+# 					  [ 202.62608043,  234.45601151,   -8.76074808,  -21.69447223],
+# 					  [  -5.35815108,   -8.76074808,    6.67399278,    6.15703104],
+# 					  [ -16.8599094 ,  -21.69447223,    6.15703104,    6.62857815]])
+#
+
+#learned only from GT locations associated with an LSVM detection with score > 0.0
+#Q_default = np.array([[ 276.27474403,  434.18800247,   -2.14075822, -113.83482137],
+# 					  [ 434.18800247,  696.53455137,  -15.21181   , -198.17555859],
+# 					  [  -2.14075822,  -15.21181   ,   10.25753854,   17.06131363],
+# 					  [-113.83482137, -198.17555859,   17.06131363,   73.22989408]])
+
+#learned from all GT
+#Q_default = np.array([[ 84.30812679,  84.21851631,  -4.01491901,  -8.5737873 ],
+# 					  [ 84.21851631,  84.22312789,  -3.56066467,  -8.07744876],
+# 					  [ -4.01491901,  -3.56066467,   4.59923143,   5.19622064],
+# 					  [ -8.5737873 ,  -8.07744876,   5.19622064,   6.10733628]])
+#also learned from all GT
+Q_default = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.22813535],
+ 					  [ 102.95992102,  179.84877761,  -13.37640528,   -9.70601621],
+ 					  [  -5.50458177,  -13.37640528,    4.56034398,    9.48945108],
+ 					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314]])
 
 #measurement function matrix
 H = np.array([[1.0,  0.0, 0.0, 0.0],
               [0.0,  0.0, 1.0, 0.0]])	
 
+USE_LEARNED_DEATH_PROBABILITIES = True
 
 #Gamma distribution parameters for calculating target death probabilities
 alpha_death = 2.0
@@ -117,6 +146,8 @@ max_vel = 1.0
 #to be associated with each other when calculating MOTA and MOTP
 MAX_ASSOCIATION_DIST = 1
 
+CAMERA_PIXEL_WIDTH = 1242
+CAMERA_PIXEL_HEIGHT = 375
 
 def get_cmap(N):
     '''Returns a function that maps each index in 0, 1, ... N-1 to a distinct 
@@ -156,6 +187,20 @@ class Target:
 
 		self.measurements = []
 		self.measurement_time_stamps = []
+
+		#if target's predicted location is offscreen, set to True and then kill
+		self.offscreen = False
+
+	def near_border(self):
+		near_border = False
+		x1 = self.x[0][0] - self.width/2.0
+		x2 = self.x[0][0] + self.width/2.0
+		y1 = self.x[2][0] - self.height/2.0
+		y2 = self.x[2][0] + self.height/2.0
+		if(x1 < 10 or x2 > (CAMERA_PIXEL_WIDTH - 15) or y1 < 10 or y2 > (CAMERA_PIXEL_HEIGHT - 15)):
+			near_border = True
+		return near_border
+
 
 	def kf_update(self, measurement, width, height, cur_time):
 		""" Perform Kalman filter update step and replace predicted position for the current time step
@@ -201,6 +246,12 @@ class Target:
 		self.P = P_predict
 		self.all_states.append((self.x, self.width, self.height))
 		self.all_time_stamps.append(cur_time)
+
+		if(self.x[0][0]<0 or self.x[0][0]>=CAMERA_PIXEL_WIDTH or \
+		   self.x[2][0]<0 or self.x[2][0]>=CAMERA_PIXEL_HEIGHT):
+#			print '!'*40, "TARGET IS OFFSCREEN", '!'*40
+			self.offscreen = True
+
 		assert(self.x.shape == (4, 1))
 
 
@@ -512,7 +563,7 @@ class Particle:
 		return (c, dead_target_indices, normalization)
 
 
-	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_list):
+	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_list, cur_time):
 		"""
 		Input:
 		- measurement_list: a list of all measurements from the current time instance
@@ -554,7 +605,7 @@ class Particle:
 		else:
 			assert(USE_PROPOSAL_DISTRIBUTION_3)
 			(targets_to_kill, measurement_associations, proposal_probability) = \
-				self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths)
+				self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths, cur_time)
 
 
 		living_target_indices = []
@@ -577,7 +628,7 @@ class Particle:
 
 		return (measurement_associations, targets_to_kill, imprt_re_weight)
 
-	def sample_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths):
+	def sample_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths, cur_time):
 		"""
 		Try sampling associations with each measurement sequentially
 		Input:
@@ -605,33 +656,33 @@ class Particle:
 			#compute target association proposal probabilities
 			proposal_distribution_list = []
 			for target_index in range(total_target_count):
-				targ_likelihoods_summed_over_meas = 0
+				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index)
+				targ_likelihoods_summed_over_meas = 0.0
 				for meas_index in range(len(measurement_list)):
 					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index)
-				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index)
-				if(not target_index in list_of_measurement_associations):
+				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)):
 					cur_target_prior = P_TARGET_EMISSION*(1-p_target_deaths[target_index])*cur_target_likelihood \
 									  /targ_likelihoods_summed_over_meas
 				else:
-					cur_target_prior = 0
+					cur_target_prior = 0.0
 
 				proposal_distribution_list.append(cur_target_likelihood*cur_target_prior)
 
 			#compute birth association proposal probability
-			cur_birth_prior = 0
+			cur_birth_prior = 0.0
 			for i in range(birth_count+1, min(len(BIRTH_COUNT_PRIOR), remaining_meas_count + birth_count + 1)):
 				cur_birth_prior += BIRTH_COUNT_PRIOR[i]*(i - birth_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_birth_prior*p_birth_likelihood)
 
 			#compute clutter association proposal probability
-			cur_clutter_prior = 0
+			cur_clutter_prior = 0.0
 			for i in range(clutter_count+1, min(len(CLUTTER_COUNT_PRIOR), remaining_meas_count + clutter_count + 1)):
 				cur_clutter_prior += CLUTTER_COUNT_PRIOR[i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
 			proposal_distribution = np.asarray(proposal_distribution_list)
-			assert(np.sum(proposal_distribution) != 0), (len(proposal_distribution), proposal_distribution, birth_count, clutter_count, len(measurement_list), total_target_count)
+			assert(np.sum(proposal_distribution) != 0.0), (len(proposal_distribution), proposal_distribution, birth_count, clutter_count, len(measurement_list), total_target_count)
 
 			proposal_distribution /= float(np.sum(proposal_distribution))
 			assert(len(proposal_distribution) == total_target_count+2)
@@ -657,15 +708,69 @@ class Particle:
 			if(not i in list_of_measurement_associations):
 				unassociated_targets.append(i)
 
-		(targets_to_kill, death_probability) =  \
-			sample_target_deaths_proposal2(unassociated_targets, p_target_deaths, P_TARGET_EMISSION)
+		if USE_LEARNED_DEATH_PROBABILITIES:
+			(targets_to_kill, death_probability) =  \
+				self.sample_target_deaths_proposal3(unassociated_targets, cur_time)
+		else:
+			(targets_to_kill, death_probability) =  \
+				self.sample_target_deaths_proposal2(unassociated_targets, cur_time)
 
 		#probability of sampling all associations
 		proposal_probability *= death_probability
-		assert(proposal_probability != 0)
+		assert(proposal_probability != 0.0)
+
+		#debug
+		for i in range(total_target_count):
+			assert(list_of_measurement_associations.count(i) == 0 or \
+				   list_of_measurement_associations.count(i) == 1), (list_of_measurement_associations,  measurement_list, total_target_count, p_target_deaths)
+		#done debug
+
 		return (targets_to_kill, list_of_measurement_associations, proposal_probability)
 
 
+	def sample_target_deaths_proposal3(self, unassociated_targets, cur_time):
+		"""
+		Sample target deaths, given they have not been associated with a measurement, using probabilities
+		learned from data.
+		Also kill all targets that are offscreen.
+
+		Inputs:
+		- unassociated_targets: a list of target indices that have not been associated with a measurement
+
+		Output:
+		- targets_to_kill: a list of targets that have been sampled to die (not killed yet)
+		- probability_of_deaths: the probability of the sampled deaths
+		"""
+		targets_to_kill = []
+		probability_of_deaths = 1.0
+
+		for target_idx in range(len(self.targets.living_targets)):
+			#kill offscreen targets with probability 1.0
+			if(self.targets.living_targets[target_idx].offscreen == True):
+				targets_to_kill.append(target_idx)
+			elif(target_idx in unassociated_targets):
+				target = self.targets.living_targets[target_idx]
+				last_assoc_time = target.last_measurement_association
+				frames_since_last_assoc = int(round((cur_time - last_assoc_time)/default_time_step))
+				assert(abs(float(frames_since_last_assoc) - (cur_time - last_assoc_time)/default_time_step) < .00000001)
+				if(self.targets.living_targets[target_idx].near_border()):
+					if frames_since_last_assoc < len(BORDER_DEATH_PROBABILITIES):
+						cur_death_prob = BORDER_DEATH_PROBABILITIES[frames_since_last_assoc]
+					else:
+						cur_death_prob = 1.0
+				else:
+					if frames_since_last_assoc < len(NOT_BORDER_DEATH_PROBABILITIES):
+						cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[frames_since_last_assoc]
+					else:
+						cur_death_prob = 1.0
+
+				assert(cur_death_prob >= 0.0 and cur_death_prob <= 1.0)
+				if(random.random() < cur_death_prob):
+					targets_to_kill.append(target_idx)
+					probability_of_deaths *= cur_death_prob
+				else:
+					probability_of_deaths *= (1 - cur_death_prob)
+		return (targets_to_kill, probability_of_deaths)
 
 
 	def sample_proposal_distr2(self, measurement_list, total_target_count, p_target_deaths):
@@ -1025,7 +1130,7 @@ class Particle:
 			else:
 				assert(USE_PROPOSAL_DISTRIBUTION_1 or USE_PROPOSAL_DISTRIBUTION_2 or USE_PROPOSAL_DISTRIBUTION_3)
 				(measurement_associations, dead_target_indices, imprt_re_weight) = \
-					self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurements)
+					self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurements, cur_time)
 			assert(len(measurement_associations) == len(measurements))
 			self.importance_weight *= imprt_re_weight #update particle's importance weight
 			#process measurement associations
@@ -1317,7 +1422,7 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	estimated_ts.plot_all_target_locations("Estimated Tracks")      
 	plt.show()
 
-f = open("KITTI_helpers/KITTI_measurements.pickle", 'r')
+f = open(MEASURMENT_FILENAME, 'r')
 measurementTargetSetsBySequence = pickle.load(f)
 f.close()
 print '-'*80
@@ -1328,26 +1433,26 @@ print measurementTargetSetsBySequence[0].measurements[3].time
 #estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[0])
 #estimated_ts.write_targets_to_KITTI_format(num_frames = 154, filename = 'rbpf_training_0000_results.txt')
 
-estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[0])')
+#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[0])')
 
 
-###############filename_mapping = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/evaluate_tracking.seqmap"
-###############n_frames         = []
-###############sequence_name    = []
-###############with open(filename_mapping, "r") as fh:
-###############    for i,l in enumerate(fh):
-###############        fields = l.split(" ")
-###############        sequence_name.append("%04d" % int(fields[0]))
-###############        n_frames.append(int(fields[3]) - int(fields[2]))
-###############fh.close() 
-###############print n_frames
-###############print sequence_name     
-###############assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-###############for seq_idx in range(len(measurementTargetSetsBySequence)):
-###############	print "Processing sequence: ", seq_idx
-###############	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-###############	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
-###############											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
+filename_mapping = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/evaluate_tracking.seqmap"
+n_frames         = []
+sequence_name    = []
+with open(filename_mapping, "r") as fh:
+    for i,l in enumerate(fh):
+        fields = l.split(" ")
+        sequence_name.append("%04d" % int(fields[0]))
+        n_frames.append(int(fields[3]) - int(fields[2]))
+fh.close() 
+print n_frames
+print sequence_name     
+assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
+for seq_idx in range(len(measurementTargetSetsBySequence)):
+	print "Processing sequence: ", seq_idx
+	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
+											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
 
 
 #test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
