@@ -414,6 +414,10 @@ class Particle:
 		self.pi_clutter_debug = -1
 		self.pi_targets_debug = []
 
+	def child_copy(self, id_):
+		child_particle = Particle(id_)
+		child_particle.importance_weight = self.importance_weight
+
 	def create_new_target(self, measurement, width, height, cur_time):
 		self.targets.create_new_target(measurement, width, height, cur_time)
 
@@ -516,7 +520,7 @@ class Particle:
 			assert(p_target_deaths[len(p_target_deaths) - 1] >= 0 and p_target_deaths[len(p_target_deaths) - 1] <= 1)
 
 
-		(targets_to_kill, measurement_associations, proposal_probability) = \
+		(targets_to_kill, measurement_associations, proposal_probability, unassociated_target_death_probs) = \
 			self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths, cur_time)
 
 
@@ -525,8 +529,12 @@ class Particle:
 			if(not i in targets_to_kill):
 				living_target_indices.append(i)
 
+#		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
+#												 measurement_associations, p_target_deaths)
+
 		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
-												 measurement_associations, p_target_deaths)
+												 measurement_associations, unassociated_target_death_probs)
+
 
 
 		assert(num_targs == self.targets.living_count)
@@ -616,9 +624,14 @@ class Particle:
 ############################################################################################################
 		#sample target deaths from unassociated targets
 		unassociated_targets = []
+		unassociated_target_death_probs = []
 		for i in range(total_target_count):
 			if(not i in list_of_measurement_associations):
 				unassociated_targets.append(i)
+				unassociated_target_death_probs.append(p_target_deaths[i])
+			else:
+				unassociated_target_death_probs.append(0.0)
+
 
 		if USE_LEARNED_DEATH_PROBABILITIES:
 			(targets_to_kill, death_probability) =  \
@@ -637,7 +650,7 @@ class Particle:
 				   list_of_measurement_associations.count(i) == 1), (list_of_measurement_associations,  measurement_list, total_target_count, p_target_deaths)
 		#done debug
 
-		return (targets_to_kill, list_of_measurement_associations, proposal_probability)
+		return (targets_to_kill, list_of_measurement_associations, proposal_probability, unassociated_target_death_probs)
 
 
 	def sample_target_deaths_proposal3(self, unassociated_targets, cur_time):
@@ -670,56 +683,13 @@ class Particle:
 		return (targets_to_kill, probability_of_deaths)
 
 
-	def calc_death_prior(living_target_indices, p_target_deaths):
-		death_prior = 1.0
-		for (cur_target_index, cur_target_death_prob) in enumerate(p_target_deaths):
-			if cur_target_index in living_target_indices:
-				death_prior *= (1.0 - cur_target_death_prob)
-			else:
-				death_prior *= cur_target_death_prob
-		return death_prior
 
-	def count_meas_orderings(M, T, b, c):
-		"""
-		We define target observation priors in terms of whether each target was observed and it
-		is irrelevant which measurement the target is associated with.  Likewise, birth count priors
-		and clutter count priors are defined in terms of total counts, not which specific measurements
-		are associated with clutter and births.  This function counts the number of possible 
-		measurement-association assignments given we have already chosen which targets are observed, 
-		how many births occur, and how many clutter measurements are present.  The prior probability of
-		observing T specific targets, b births, and c clutter observations given M measurements should
-		be divided by the returned value to split the prior probability between possibilities.
-
-		[
-		*OLD EXPLANATION BELOW*:
-		We view the the ordering of measurements on any time instance as arbitrary.  This
-		function counts the number of possible measurement orderings given we have already
-		chosen which targets are observed, how many births occur, and how many clutter 
-		measurements are present.
-		]
-		
-		Inputs:
-		- M: the number of measurements
-		- T: the number of observed targets
-		- b: the number of birth associations
-		- c: the number of clutter associations
-
-		This must be true: M = T+b+c
-
-		Output:
-		- combinations: the number of measurement orderings as a float. The value is:
-			combinations = nCr(M, T)*math.factorial(T)*nCr(M-T, b)
-
-		"""
-		assert(M == T + b + c)
-		combinations = nCr(M, T)*math.factorial(T)*nCr(M-T, b)
-		return float(combinations)
-
-
-	def get_prior(living_target_indices, total_target_count, number_measurements, 
+	def get_prior(self, living_target_indices, total_target_count, number_measurements, 
 				 measurement_associations, p_target_deaths, p_target_emission, 
 				 birth_count_prior, clutter_count_prior):
 		"""
+DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
+
 		Input: 
 		- living_target_indices: a list of indices of targets from last time instance that are still alive
 		- total_target_count: the number of living targets on the previous time instace
@@ -738,6 +708,58 @@ class Particle:
 			clutter_count_prior[i] = the probability of i clutter measurements during 
 			any time instance
 		"""
+		def calc_death_prior(living_target_indices, p_target_deaths):
+			death_prior = 1.0
+			for (cur_target_index, cur_target_death_prob) in enumerate(p_target_deaths):
+				if cur_target_index in living_target_indices:
+					death_prior *= (1.0 - cur_target_death_prob)
+					assert((1.0 - cur_target_death_prob) != 0.0), cur_target_death_prob
+				else:
+					death_prior *= cur_target_death_prob
+					assert((cur_target_death_prob) != 0.0), cur_target_death_prob
+
+			return death_prior
+
+		def nCr(n,r):
+		    return math.factorial(n) / math.factorial(r) / math.factorial(n-r)
+
+		def count_meas_orderings(M, T, b, c):
+			"""
+			We define target observation priors in terms of whether each target was observed and it
+			is irrelevant which measurement the target is associated with.  Likewise, birth count priors
+			and clutter count priors are defined in terms of total counts, not which specific measurements
+			are associated with clutter and births.  This function counts the number of possible 
+			measurement-association assignments given we have already chosen which targets are observed, 
+			how many births occur, and how many clutter measurements are present.  The prior probability of
+			observing T specific targets, b births, and c clutter observations given M measurements should
+			be divided by the returned value to split the prior probability between possibilities.
+
+			[
+			*OLD EXPLANATION BELOW*:
+			We view the the ordering of measurements on any time instance as arbitrary.  This
+			function counts the number of possible measurement orderings given we have already
+			chosen which targets are observed, how many births occur, and how many clutter 
+			measurements are present.
+			]
+			
+			Inputs:
+			- M: the number of measurements
+			- T: the number of observed targets
+			- b: the number of birth associations
+			- c: the number of clutter associations
+
+			This must be true: M = T+b+c
+
+			Output:
+			- combinations: the number of measurement orderings as a float. The value is:
+				combinations = nCr(M, T)*math.factorial(T)*nCr(M-T, b)
+
+			"""
+			assert(M == T + b + c)
+			combinations = nCr(M, T)*math.factorial(T)*nCr(M-T, b)
+			return float(combinations)
+
+
 		assert(len(measurement_associations) == number_measurements)
 		#numnber of targets from the last time instance that are still alive
 		living_target_count = len(living_target_indices)
@@ -764,7 +786,7 @@ class Particle:
 			(number_measurements, observed_target_count, birth_count, clutter_count, \
 			total_target_count, measurement_associations)
 
-		assert(len(p_target_deaths) == total_target_count)
+#		assert(len(p_target_deaths) == total_target_count)
 		death_prior = calc_death_prior(living_target_indices, p_target_deaths)
 
 		#the prior probability of this number of measurements with these associations
@@ -779,6 +801,7 @@ class Particle:
 						  						birth_count, clutter_count)
 
 		total_prior = death_prior * assoc_prior
+		assert(total_prior != 0.0), (death_prior, assoc_prior)
 		return total_prior
 
 	def get_exact_prob_hidden_and_data(self, measurement_list, living_target_indices, total_target_count,
@@ -807,10 +830,16 @@ class Particle:
 		"""
 
 
+		priorA = self.get_prior(living_target_indices, total_target_count, len(measurement_list), 
+				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
+								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+
 		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
 				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
 								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
 		prior = hidden_state.total_prior
+
+		assert(priorA == prior), (priorA, prior)
 
 		likelihood = 1.0
 		assert(len(measurement_associations) == len(measurement_list))
@@ -825,6 +854,7 @@ class Particle:
 											   				 meas_association)
 
 		assert(prior*likelihood != 0.0), (prior, likelihood)
+
 		return prior*likelihood
 
 	def memoized_assoc_likelihood(self, measurement, target_index):
