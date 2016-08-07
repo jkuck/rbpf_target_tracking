@@ -19,7 +19,7 @@ sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_clutter_probabilities_score_range_wrapper
-
+from learn_params1 import get_meas_target_set
 
 from multiple_meas_per_time_assoc_priors import HiddenState
 from proposal2_helper import possible_measurement_target_associations
@@ -47,12 +47,42 @@ USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
+#SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
+SCORE_INTERVALS = [i for i in range(2, 20)]
+(measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
+	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
+#from learn_params
+#BIRTH_COUNT_PRIOR = [0.9371030016191306, 0.0528085689376012, 0.007223813675426578, 0.0016191306513887158, 0.000747291069871715, 0.00012454851164528583, 0, 0.00012454851164528583, 0.00012454851164528583, 0, 0, 0, 0, 0.00012454851164528583]
+#from learn_params1, not counting 'ignored' ground truth
+BIRTH_COUNT_PRIOR = [0.95640802092415, 0.039357329679910326, 0.0027400672561962883, 0.0008718395815170009, 0.00012454851164528583, 0.00012454851164528583, 0, 0.00024909702329057166, 0, 0, 0.00012454851164528583]
 
+def get_param_index(score_intervals, score):
+	"""
+	Inputs:
+	- score_intervals: a list specifying detection score ranges for which parameters have been specified
+	- score: the score of a detection
 
-BIRTH_COUNT_PRIOR = [0.9371030016191306, 0.0528085689376012, 0.007223813675426578, 0.0016191306513887158, 0.000747291069871715, 0.00012454851164528583, 0, 0.00012454851164528583, 0.00012454851164528583, 0, 0, 0, 0, 0.00012454851164528583]
+	Output:
+	- index: output the index in parameter lists corresponding to the range this score is in
+	"""
+
+	index = 0
+	for i in range(1, len(score_intervals)):
+		if(score > score_intervals[i]):
+			index += 1
+		else:
+			break
+	assert(score > score_intervals[index])
+	if(index < len(score_intervals) - 1):
+		assert(score < score_intervals[index+1])
+	return index
+
 
 #regionlet detection with score > 2.0:
-P_TARGET_EMISSION = 0.813482 
+#from learn_params
+#P_TARGET_EMISSION = 0.813482 
+#from learn_params1, not counting 'ignored' ground truth
+P_TARGET_EMISSION = 0.813358070501
 #death probabiltiies, for sampling AFTER associations, conditioned on un-association
 #DEATH_PROBABILITIES = [-99, 0.1558803061934586, 0.24179829890643986, 0.1600831600831601, 0.10416666666666667, 0.08835341365461848, 0.04081632653061224, 0.06832298136645963, 0.06201550387596899, 0.04716981132075472, 0.056818181818181816, 0.013333333333333334, 0.028985507246376812, 0.03278688524590164, 0.0, 0.0, 0.0, 0.05, 0.0, 0.0625, 0.03571428571428571, 0.0, 0.0, 0.043478260869565216, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 #BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425, 0.2222222222222222, 0.35714285714285715, 0.2222222222222222, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -62,9 +92,10 @@ P_TARGET_EMISSION = 0.813482
 BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
 NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
 
-
-CLUTTER_COUNT_PRIOR = CLUTTER_COUNT_PRIOR = [0.7860256569933989, 0.17523975588491716 - .001, 0.031635321957902605, 0.004857391954166148, 0.0016191306513887158, 0.0003736455349358575, 0.00024909702329057166, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
-
+#from learn_params
+#CLUTTER_COUNT_PRIOR = [0.7860256569933989, 0.17523975588491716 - .001, 0.031635321957902605, 0.004857391954166148, 0.0016191306513887158, 0.0003736455349358575, 0.00024909702329057166, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+#from learn_params1, not counting 'ignored' ground truth
+CLUTTER_COUNT_PRIOR = [0.5424333167268651, 0.3045211109727239, 0.11010088429443268, 0.0298916427948686, 0.008718395815170008, 0.003113712791132146, 0.0009963880931622867, 0.00012454851164528583, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06, 5e-06]
 
 p_clutter_likelihood = 1.0/float(1242*375)
 #p_birth_likelihood = 0.035
@@ -73,16 +104,22 @@ p_birth_likelihood = 1.0/float(1242*375)
 
 #Kalman filter defaults
 #Think about doing this in a more principled way!!!
-P_default = np.array([[57.54277774, 0, 			 0, 0],
+#P_default = np.array([[57.54277774, 0, 			 0, 0],
+# 					  [0,          10, 			 0, 0],
+# 					  [0, 			0, 17.86392672, 0],
+# 					  [0, 			0, 			 0, 3]])
+P_default = np.array([[40.64558317, 0, 			 0, 0],
  					  [0,          10, 			 0, 0],
- 					  [0, 			0, 17.86392672, 0],
+ 					  [0, 			0, 5.56278505, 0],
  					  [0, 			0, 			 0, 3]])
 
-
 #regionlet detection with score > 2.0:
-R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
- 					  [ -3.60666228e-02,   1.64772050e+01]])
-
+#from learn_params
+#R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+# 					  [ -3.60666228e-02,   1.64772050e+01]])
+#from learn_params1, not counting 'ignored' ground truth
+R_default = np.array([[ 40.64558317,   0.14036472],
+ 					  [  0.14036472,   5.56278505]])
 #learned from all GT
 #Q_default = np.array([[ 84.30812679,  84.21851631,  -4.01491901,  -8.5737873 ],
 # 					  [ 84.21851631,  84.22312789,  -3.56066467,  -8.07744876],
@@ -305,14 +342,17 @@ class Target:
 		return cur_death_prob
 
 class Measurement:
-	def __init__(self, time = -1):
-		#self.val is a list of numpy arrays of measurement x, y locations
-		self.val = []
-		#list of widths of each bounding box
-		self.widths = []
-		#list of widths of each bounding box		
-		self.heights = []
-		self.time = time
+    #a collection of measurements at a single time instance
+    def __init__(self, time = -1):
+        #self.val is a list of numpy arrays of measurement x, y locations
+        self.val = []
+        #list of widths of each bounding box
+        self.widths = []
+        #list of widths of each bounding box        
+        self.heights = []
+        #list of scores for each individual measurement
+        self.scores = []
+        self.time = time
 
 class TargetSet:
 	"""
@@ -456,45 +496,9 @@ class Particle:
 		#print "targets killed = ", num_targets_killed
 
 
-	def sample_deaths_among_specific_targets_given_no_association(self, at_risk_targets):
-		"""
-		Sample deaths (without killing !!) targets from at_risk_targets, given that
-		they were not associated with a measurement during the current time instance
-		
-		death_prob for every target should have already been calculated!!
-
-		Input:
-		- at_risk_targets: a list of targets that may be killed
-
-		Output:
-		- total_death_prob: the probability of sampled deaths
-		- targets_to_kill : a list of targets that should be killed
-		"""
-		total_death_prob = 1.0
-		targets_to_kill = []
-		for index in at_risk_targets:
-			cur_target = self.targets.living_targets[index]
-			cur_death_prob = cur_target.death_prob
-			cur_life_prob = (1 - P_TARGET_EMISSION) * (1 - cur_death_prob)
-			cur_death_prob = cur_death_prob / (cur_death_prob + cur_life_prob) #normalize cur_death_prob
-			assert(cur_death_prob < 1.0 and cur_death_prob > 0.0)
-			if (random.random() < cur_death_prob): #kill target
-				targets_to_kill.append(index)
-				total_death_prob *= cur_death_prob
-			else: #don't kill target
-				total_death_prob *= (1.0 - cur_death_prob)
-
-		return (total_death_prob, targets_to_kill)
 
 
-
-
-
-
-
-
-
-	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_list, cur_time):
+	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_list, cur_time, measurement_scores):
 		"""
 		Input:
 		- measurement_list: a list of all measurements from the current time instance
@@ -521,7 +525,7 @@ class Particle:
 
 
 		(targets_to_kill, measurement_associations, proposal_probability, unassociated_target_death_probs) = \
-			self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths, cur_time)
+			self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths, cur_time, measurement_scores)
 
 
 		living_target_indices = []
@@ -533,9 +537,7 @@ class Particle:
 #												 measurement_associations, p_target_deaths)
 
 		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
-												 measurement_associations, unassociated_target_death_probs)
-
-
+												 measurement_associations, unassociated_target_death_probs, measurement_scores, SCORE_INTERVALS)
 
 		assert(num_targs == self.targets.living_count)
 		#double check targets_to_kill is sorted
@@ -547,7 +549,7 @@ class Particle:
 
 		return (measurement_associations, targets_to_kill, imprt_re_weight)
 
-	def sample_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths, cur_time):
+	def sample_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths, cur_time, measurement_scores):
 		"""
 		Try sampling associations with each measurement sequentially
 		Input:
@@ -570,7 +572,8 @@ class Particle:
 		birth_count = 0
 		clutter_count = 0
 		remaining_meas_count = len(measurement_list)
-		for cur_meas in measurement_list:
+		for (index, cur_meas) in enumerate(measurement_list):
+			param_index = get_param_index(SCORE_INTERVALS, measurement_scores[index])
 			#create proposal distribution for the current measurement
 			#compute target association proposal probabilities
 			proposal_distribution_list = []
@@ -581,8 +584,10 @@ class Particle:
 					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index)
 				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)\
 					and p_target_deaths[target_index] < 1.0):
-					cur_target_prior = P_TARGET_EMISSION*cur_target_likelihood \
+					cur_target_prior = target_emission_probs[param_index]*cur_target_likelihood \
 									  /targ_likelihoods_summed_over_meas
+#					cur_target_prior = P_TARGET_EMISSION*cur_target_likelihood \
+#									  /targ_likelihoods_summed_over_meas
 				else:
 					cur_target_prior = 0.0
 
@@ -590,14 +595,14 @@ class Particle:
 
 			#compute birth association proposal probability
 			cur_birth_prior = 0.0
-			for i in range(birth_count+1, min(len(BIRTH_COUNT_PRIOR), remaining_meas_count + birth_count + 1)):
-				cur_birth_prior += BIRTH_COUNT_PRIOR[i]*(i - birth_count)/remaining_meas_count 
+			for i in range(birth_count+1, min(len(birth_probabilities[param_index]), remaining_meas_count + birth_count + 1)):
+				cur_birth_prior += birth_probabilities[param_index][i]*(i - birth_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_birth_prior*p_birth_likelihood)
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
-			for i in range(clutter_count+1, min(len(CLUTTER_COUNT_PRIOR), remaining_meas_count + clutter_count + 1)):
-				cur_clutter_prior += CLUTTER_COUNT_PRIOR[i]*(i - clutter_count)/remaining_meas_count 
+			for i in range(clutter_count+1, min(len(clutter_probabilities[param_index]), remaining_meas_count + clutter_count + 1)):
+				cur_clutter_prior += clutter_probabilities[param_index][i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
@@ -685,8 +690,8 @@ class Particle:
 
 
 	def get_prior(self, living_target_indices, total_target_count, number_measurements, 
-				 measurement_associations, p_target_deaths, p_target_emission, 
-				 birth_count_prior, clutter_count_prior):
+				 measurement_associations, p_target_deaths, target_emission_probs, 
+				 birth_count_priors, clutter_count_priors, measurement_scores, score_intervals):
 		"""
 DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
@@ -775,13 +780,32 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		#the number of targets we observed on this time instance
 		observed_target_count = len(unique_assoc)
+
+		#the number of target measurements by measurement score
+		meas_counts_by_score = [0 for i in range(len(score_intervals))]
+		for i in range(len(measurement_associations)):
+			if measurement_associations[i] != -1 and measurement_associations[i] != total_target_count:
+				index = get_param_index(score_intervals, measurement_scores[i])
+				meas_counts_by_score[index] += 1
+
 		#the number of targets we don't observe on this time instance
 		#but are still alive on this time instance
 		unobserved_target_count = living_target_count - observed_target_count
 		#the number of new targets born on this time instance
 		birth_count = measurement_associations.count(total_target_count)
+		birth_counts_by_score = [0 for i in range(len(score_intervals))]
+		for i in range(len(measurement_associations)):
+			if measurement_associations[i] == total_target_count:
+				index = get_param_index(score_intervals, measurement_scores[i])
+				birth_counts_by_score[index] += 1
 		#the number of clutter measurements on this time instance
 		clutter_count = measurement_associations.count(-1)
+		clutter_counts_by_score = [0 for i in range(len(score_intervals))]
+		for i in range(len(measurement_associations)):
+			if measurement_associations[i] == -1:
+				index = get_param_index(score_intervals, measurement_scores[i])
+				clutter_counts_by_score[index] += 1
+
 		assert(observed_target_count + birth_count + clutter_count == number_measurements),\
 			(number_measurements, observed_target_count, birth_count, clutter_count, \
 			total_target_count, measurement_associations)
@@ -791,21 +815,27 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		#the prior probability of this number of measurements with these associations
 		#given these target deaths
-		assert(0 <= clutter_count and clutter_count < len(clutter_count_prior)), clutter_count
-		assert(0 <= birth_count and birth_count < len(birth_count_prior)), birth_count
-		assoc_prior = p_target_emission**(observed_target_count) \
-						  *(1-p_target_emission)**(unobserved_target_count) \
-						  *birth_count_prior[birth_count] \
-						  *clutter_count_prior[clutter_count] \
-						  /count_meas_orderings(number_measurements, observed_target_count, \
-						  						birth_count, clutter_count)
+		for i in range(len(score_intervals)):
+
+			assert(0 <= clutter_counts_by_score[i] and clutter_counts_by_score[i] < len(clutter_count_priors[i])), clutter_counts_by_score[i]
+			assert(0 <= birth_counts_by_score[i] and birth_counts_by_score[i] < len(birth_count_priors[i])), birth_counts_by_score[i]
+
+		p_target_does_not_emit = 1.0 - sum(target_emission_probs)
+		assoc_prior = (p_target_does_not_emit)**(unobserved_target_count) \
+					  /count_meas_orderings(number_measurements, observed_target_count, \
+						  					birth_count, clutter_count)
+		for i in range(len(score_intervals)):
+			assoc_prior *= target_emission_probs[i]**(meas_counts_by_score[i]) \
+							  *birth_count_priors[i][birth_counts_by_score[i]] \
+							  *clutter_count_priors[i][clutter_counts_by_score[i]] \
+						  
 
 		total_prior = death_prior * assoc_prior
 		assert(total_prior != 0.0), (death_prior, assoc_prior)
 		return total_prior
 
 	def get_exact_prob_hidden_and_data(self, measurement_list, living_target_indices, total_target_count,
-									   measurement_associations, p_target_deaths):
+									   measurement_associations, p_target_deaths, measurement_scores, score_intervals):
 		"""
 		Calculate p(data, associations, #measurements, deaths) as:
 		p(data|deaths, associations, #measurements)*p(deaths)*p(associations, #measurements|deaths)
@@ -829,17 +859,16 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		is part of the data (or an observed variable)
 		"""
 
+		prior = self.get_prior(living_target_indices, total_target_count, len(measurement_list), 
+				 				   measurement_associations, p_target_deaths, target_emission_probs, 
+								   birth_probabilities, clutter_probabilities, measurement_scores, score_intervals)
 
-		priorA = self.get_prior(living_target_indices, total_target_count, len(measurement_list), 
-				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
-								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
-
-		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
-				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
-								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
-		prior = hidden_state.total_prior
-
-		assert(priorA == prior), (priorA, prior)
+#		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
+#				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
+#								   BIRTH_COUNT_PRIOR, CLUTTER_COUNT_PRIOR)
+#		priorA = hidden_state.total_prior
+#
+#		assert(priorA == prior), (priorA, prior)
 
 		likelihood = 1.0
 		assert(len(measurement_associations) == len(measurement_list))
@@ -885,7 +914,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		self.plot_all_target_locations()
 
 	#@profile
-	def update_particle_with_measurement(self, measurements, widths, heights, cur_time):
+	def update_particle_with_measurement(self, measurements, widths, heights, cur_time, measurement_scores):
 		"""
 		Input:
 		-measurements: this is a list of measurement arrays
@@ -901,7 +930,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		birth_value = self.targets.living_count
 
 		(measurement_associations, dead_target_indices, imprt_re_weight) = \
-			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurements, cur_time)
+			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurements, cur_time, measurement_scores)
 		assert(len(measurement_associations) == len(measurements))
 		assert(imprt_re_weight != 0.0), imprt_re_weight
 		self.importance_weight *= imprt_re_weight #update particle's importance weight
@@ -1070,7 +1099,7 @@ def run_rbpf_on_targetset(target_set):
 
 		new_target_list = [] #for debugging, list of booleans whether each particle created a new target
 		for particle in particle_set:
-			new_target = particle.update_particle_with_measurement(measurements, measurement_set.widths, measurement_set.heights, time_stamp)
+			new_target = particle.update_particle_with_measurement(measurements, measurement_set.widths, measurement_set.heights, time_stamp, measurement_set.scores)
 			new_target_list.append(new_target)
 		normalize_importance_weights(particle_set)
 		#debugging
@@ -1197,9 +1226,9 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	estimated_ts.plot_all_target_locations("Estimated Tracks")      
 	plt.show()
 
-f = open(MEASURMENT_FILENAME, 'r')
-measurementTargetSetsBySequence = pickle.load(f)
-f.close()
+#f = open(MEASURMENT_FILENAME, 'r')
+#measurementTargetSetsBySequence = pickle.load(f)
+#f.close()
 print '-'*80
 print measurementTargetSetsBySequence[0].measurements[0].time
 print measurementTargetSetsBySequence[0].measurements[1].time
@@ -1223,8 +1252,8 @@ fh.close()
 print n_frames
 print sequence_name     
 assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-#for seq_idx in range(len(measurementTargetSetsBySequence)):
-for seq_idx in range(0,1):
+for seq_idx in range(len(measurementTargetSetsBySequence)):
+#for seq_idx in range(0,1):
 	print "Processing sequence: ", seq_idx
 	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
 	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
