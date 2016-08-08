@@ -594,7 +594,8 @@ class Particle:
 				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index, meas_noise_covs[param_index], param_index)
 				targ_likelihoods_summed_over_meas = 0.0
 				for meas_index in range(len(measurement_list)):
-					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index,  meas_noise_covs[param_index], param_index)
+					temp_param_index = get_param_index(SCORE_INTERVALS, measurement_scores[meas_index]) #param_index for the meas_index in this loop
+					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index,  meas_noise_covs[temp_param_index], temp_param_index)
 				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)\
 					and p_target_deaths[target_index] < 1.0):
 					cur_target_prior = target_emission_probs[param_index]*cur_target_likelihood \
@@ -950,10 +951,10 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 #				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)]
 #				(assoc_likelihood, cached_score_index)	= self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)]
 				(assoc_likelihood, cached_score_index, cached_measurement)	= self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
-#				assert(cached_score_index == score_index), (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
-				if(cached_score_index != score_index):
-					print (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
-					time.sleep(2)
+				assert(cached_score_index == score_index), (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
+#				if(cached_score_index != score_index):
+#					print (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
+#					time.sleep(2)
 				return assoc_likelihood
 			else:
 				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
