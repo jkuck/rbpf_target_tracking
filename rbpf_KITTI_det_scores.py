@@ -48,6 +48,7 @@ USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially
 default_time_step = .1 
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
+USE_CONSTANT_R = False
 SCORE_INTERVALS = [i for i in range(2, 20)]
 (measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
 	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
@@ -104,22 +105,27 @@ p_birth_likelihood = 1.0/float(1242*375)
 
 #Kalman filter defaults
 #Think about doing this in a more principled way!!!
-#P_default = np.array([[57.54277774, 0, 			 0, 0],
-# 					  [0,          10, 			 0, 0],
-# 					  [0, 			0, 17.86392672, 0],
-# 					  [0, 			0, 			 0, 3]])
-P_default = np.array([[40.64558317, 0, 			 0, 0],
+P_default = np.array([[57.54277774, 0, 			 0, 0],
  					  [0,          10, 			 0, 0],
- 					  [0, 			0, 5.56278505, 0],
+ 					  [0, 			0, 17.86392672, 0],
  					  [0, 			0, 			 0, 3]])
+#P_default = np.array([[40.64558317, 0, 			 0, 0],
+# 					  [0,          10, 			 0, 0],
+# 					  [0, 			0, 5.56278505, 0],
+# 					  [0, 			0, 			 0, 3]])
 
 #regionlet detection with score > 2.0:
 #from learn_params
-#R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
-# 					  [ -3.60666228e-02,   1.64772050e+01]])
+R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+ 					  [ -3.60666228e-02,   1.64772050e+01]])
 #from learn_params1, not counting 'ignored' ground truth
-R_default = np.array([[ 40.64558317,   0.14036472],
- 					  [  0.14036472,   5.56278505]])
+#R_default = np.array([[ 40.64558317,   0.14036472],
+# 					  [  0.14036472,   5.56278505]])
+
+if USE_CONSTANT_R:
+	for i in range(len(meas_noise_covs)):
+		meas_noise_covs[i] = R_default
+
 #learned from all GT
 #Q_default = np.array([[ 84.30812679,  84.21851631,  -4.01491901,  -8.5737873 ],
 # 					  [ 84.21851631,  84.22312789,  -3.56066467,  -8.07744876],
@@ -214,7 +220,7 @@ class Target:
 		return near_border
 
 
-	def kf_update(self, measurement, width, height, cur_time):
+	def kf_update(self, measurement, width, height, cur_time, meas_noise_cov):
 		""" Perform Kalman filter update step and replace predicted position for the current time step
 		with the updated position in self.all_states
 		Input:
@@ -225,7 +231,7 @@ class Target:
 		reformat_meas = np.array([[measurement[0]],
 								  [measurement[1]]])
 		assert(self.x.shape == (4, 1))
-		S = np.dot(np.dot(H, self.P), H.T) + R_default
+		S = np.dot(np.dot(H, self.P), H.T) + meas_noise_cov
 		K = np.dot(np.dot(self.P, H.T), inv(S))
 		residual = reformat_meas - np.dot(H, self.x)
 		updated_x = self.x + np.dot(K, residual)
@@ -578,10 +584,10 @@ class Particle:
 			#compute target association proposal probabilities
 			proposal_distribution_list = []
 			for target_index in range(total_target_count):
-				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index)
+				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index, meas_noise_covs[param_index])
 				targ_likelihoods_summed_over_meas = 0.0
 				for meas_index in range(len(measurement_list)):
-					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index)
+					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index,  meas_noise_covs[param_index])
 				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)\
 					and p_target_deaths[target_index] < 1.0):
 					cur_target_prior = target_emission_probs[param_index]*cur_target_likelihood \
@@ -879,20 +885,23 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				likelihood *= p_clutter_likelihood
 			else:
 				assert(meas_association >= 0 and meas_association < total_target_count), (meas_association, total_target_count)
+				param_index = get_param_index(score_intervals, measurement_scores[meas_index])
 				likelihood *= self.memoized_assoc_likelihood(measurement_list[meas_index], \
-											   				 meas_association)
+											   				 meas_association, meas_noise_covs[param_index])
 
 		assert(prior*likelihood != 0.0), (prior, likelihood)
 
 		return prior*likelihood
 
-	def memoized_assoc_likelihood(self, measurement, target_index):
+	def memoized_assoc_likelihood(self, measurement, target_index, meas_noise_cov):
 
 		if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
-			return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
+			return self.assoc_likelihood_cache[(measurement[0], measurement[1], meas_noise_cov[0][0],
+												meas_noise_cov[0][1], meas_noise_cov[1][0], meas_noise_cov[1][1],
+												target_index)]
 		else:
 			target = self.targets.living_targets[target_index]
-			S = np.dot(np.dot(H, target.P), H.T) + R_default
+			S = np.dot(np.dot(H, target.P), H.T) + meas_noise_cov
 			assert(target.x.shape == (4, 1))
 	
 			state_mean_meas_space = np.dot(H, target.x)
@@ -902,7 +911,9 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
 
 			assoc_likelihood = distribution.pdf(measurement)
-			self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = assoc_likelihood
+			self.assoc_likelihood_cache[(measurement[0], measurement[1], meas_noise_cov[0][0],
+												meas_noise_cov[0][1], meas_noise_cov[1][0], meas_noise_cov[1][1],
+												target_index)] = assoc_likelihood
 			return assoc_likelihood
 
 	def debug_target_creation(self):
@@ -942,7 +953,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				new_target = True 
 			#update the target corresponding to the association we have sampled
 			elif((meas_assoc >= 0) and (meas_assoc < birth_value)):
-				self.targets.living_targets[meas_assoc].kf_update(measurements[meas_index], widths[meas_index], heights[meas_index], cur_time)
+				index = get_param_index(SCORE_INTERVALS, measurement_scores[meas_index])
+				self.targets.living_targets[meas_assoc].kf_update(measurements[meas_index], widths[meas_index], heights[meas_index], cur_time, meas_noise_covs[index])
 			else:
 				#otherwise the measurement was associated with clutter
 				assert(meas_assoc == -1), ("meas_assoc = ", meas_assoc)
@@ -979,18 +991,18 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 
 
-#assumed that the Kalman filter prediction step has already been run for this
-#target on the current time step
-#RUN PREDICTION FOR ALL TARGETS AT THE BEGINNING OF EACH TIME STEP!!!
-#@profile
-def assoc_likelihood(measurement, target):
-	S = np.dot(np.dot(H, target.P), H.T) + R_default
-	assert(target.x.shape == (4, 1))
-
-	state_mean_meas_space = np.dot(H, target.x)
-
-	distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
-	return distribution.pdf(measurement)
+###########assumed that the Kalman filter prediction step has already been run for this
+###########target on the current time step
+###########RUN PREDICTION FOR ALL TARGETS AT THE BEGINNING OF EACH TIME STEP!!!
+###########@profile
+##########def assoc_likelihood(measurement, target):
+##########	S = np.dot(np.dot(H, target.P), H.T) + R_default
+##########	assert(target.x.shape == (4, 1))
+##########
+##########	state_mean_meas_space = np.dot(H, target.x)
+##########
+##########	distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
+##########	return distribution.pdf(measurement)
 
 def normalize_importance_weights(particle_set):
 	normalization_constant = 0.0
@@ -1252,10 +1264,11 @@ fh.close()
 print n_frames
 print sequence_name     
 assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-for seq_idx in range(len(measurementTargetSetsBySequence)):
-#for seq_idx in range(0,1):
+#for seq_idx in range(len(measurementTargetSetsBySequence)):
+for seq_idx in range(0,1):
 	print "Processing sequence: ", seq_idx
-	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+#	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+	estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
 	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
 											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
 
