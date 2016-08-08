@@ -591,10 +591,10 @@ class Particle:
 			#compute target association proposal probabilities
 			proposal_distribution_list = []
 			for target_index in range(total_target_count):
-				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index, meas_noise_covs[param_index])
+				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index, meas_noise_covs[param_index], param_index)
 				targ_likelihoods_summed_over_meas = 0.0
 				for meas_index in range(len(measurement_list)):
-					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index,  meas_noise_covs[param_index])
+					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index,  meas_noise_covs[param_index], param_index)
 				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)\
 					and p_target_deaths[target_index] < 1.0):
 					cur_target_prior = target_emission_probs[param_index]*cur_target_likelihood \
@@ -894,13 +894,13 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				assert(meas_association >= 0 and meas_association < total_target_count), (meas_association, total_target_count)
 				param_index = get_param_index(score_intervals, measurement_scores[meas_index])
 				likelihood *= self.memoized_assoc_likelihood(measurement_list[meas_index], \
-											   				 meas_association, meas_noise_covs[param_index])
+											   				 meas_association, meas_noise_covs[param_index], param_index)
 
 		assert(prior*likelihood != 0.0), (prior, likelihood)
 
 		return prior*likelihood
 
-	def memoized_assoc_likelihood(self, measurement, target_index, meas_noise_cov):
+	def memoized_assoc_likelihood(self, measurement, target_index, meas_noise_cov, score_index):
 		"""
 			When caching likelihoods, we assume that there are never two separate measurements 
 			with identical measurement values and different scores (seems safe)
@@ -945,9 +945,16 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		else:
 			if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
+#			if((measurement[0], measurement[1], target_index, score_index) in self.assoc_likelihood_cache):
 				CACHED_LIKELIHOODS = CACHED_LIKELIHOODS + 1
-				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
-
+#				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)]
+#				(assoc_likelihood, cached_score_index)	= self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)]
+				(assoc_likelihood, cached_score_index, cached_measurement)	= self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
+#				assert(cached_score_index == score_index), (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
+				if(cached_score_index != score_index):
+					print (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
+					time.sleep(2)
+				return assoc_likelihood
 			else:
 				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
 				target = self.targets.living_targets[target_index]
@@ -973,7 +980,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 					a = -.5*np.dot(np.dot(offset, S_inv), offset)
 					assoc_likelihood = LIKELIHOOD_DISTR_NORM*math.exp(a)
 
-				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = assoc_likelihood
+#				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)] = assoc_likelihood
+				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = (assoc_likelihood, score_index, measurement)
 				return assoc_likelihood
 
 	def debug_target_creation(self):
