@@ -20,6 +20,7 @@ import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
+from jdk_helper_evaluate_results import eval_results
 
 from multiple_meas_per_time_assoc_priors import HiddenState
 from proposal2_helper import possible_measurement_target_associations
@@ -28,20 +29,22 @@ from proposal2_helper import sample_birth_clutter_counts
 from proposal2_helper import sample_target_deaths_proposal2
 
 import cProfile
+import time
 
 #MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
-MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
+#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
 
+#run on these sequences
+SEQUENCES_TO_PROCESS = [0]
+#eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
+#sleep(5)
 #RBPF algorithmic paramters
 N_PARTICLES = 100 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
 
-#data generation parameters
-#Multiple measurements may be generated on a single time instance if True
-MULTIPLE_MEAS_PER_TIME = True 
-
+USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check USE_CONSTANT_R
 USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially, then unassociated target deaths
 
 #default time between succesive measurement time instances (in seconds)
@@ -49,6 +52,10 @@ default_time_step = .1
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
 USE_CONSTANT_R = False
+#For testing why score interval for R are slow
+CACHED_LIKELIHOODS = 0
+NOT_CACHED_LIKELIHOODS = 0
+
 SCORE_INTERVALS = [i for i in range(2, 20)]
 (measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
 	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
@@ -105,26 +112,23 @@ p_birth_likelihood = 1.0/float(1242*375)
 
 #Kalman filter defaults
 #Think about doing this in a more principled way!!!
-P_default = np.array([[57.54277774, 0, 			 0, 0],
- 					  [0,          10, 			 0, 0],
- 					  [0, 			0, 17.86392672, 0],
- 					  [0, 			0, 			 0, 3]])
-#P_default = np.array([[40.64558317, 0, 			 0, 0],
+#P_default = np.array([[57.54277774, 0, 			 0, 0],
 # 					  [0,          10, 			 0, 0],
-# 					  [0, 			0, 5.56278505, 0],
+# 					  [0, 			0, 17.86392672, 0],
 # 					  [0, 			0, 			 0, 3]])
+P_default = np.array([[40.64558317, 0, 			 0, 0],
+ 					  [0,          10, 			 0, 0],
+ 					  [0, 			0, 5.56278505, 0],
+ 					  [0, 			0, 			 0, 3]])
 
 #regionlet detection with score > 2.0:
 #from learn_params
-R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
- 					  [ -3.60666228e-02,   1.64772050e+01]])
+#R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+# 					  [ -3.60666228e-02,   1.64772050e+01]])
 #from learn_params1, not counting 'ignored' ground truth
-#R_default = np.array([[ 40.64558317,   0.14036472],
-# 					  [  0.14036472,   5.56278505]])
+R_default = np.array([[ 40.64558317,   0.14036472],
+ 					  [  0.14036472,   5.56278505]])
 
-if USE_CONSTANT_R:
-	for i in range(len(meas_noise_covs)):
-		meas_noise_covs[i] = R_default
 
 #learned from all GT
 #Q_default = np.array([[ 84.30812679,  84.21851631,  -4.01491901,  -8.5737873 ],
@@ -231,7 +235,10 @@ class Target:
 		reformat_meas = np.array([[measurement[0]],
 								  [measurement[1]]])
 		assert(self.x.shape == (4, 1))
-		S = np.dot(np.dot(H, self.P), H.T) + meas_noise_cov
+		if USE_CONSTANT_R:
+			S = np.dot(np.dot(H, self.P), H.T) + R_default
+		else:
+			S = np.dot(np.dot(H, self.P), H.T) + meas_noise_cov
 		K = np.dot(np.dot(self.P, H.T), inv(S))
 		residual = reformat_meas - np.dot(H, self.x)
 		updated_x = self.x + np.dot(K, residual)
@@ -894,27 +901,80 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		return prior*likelihood
 
 	def memoized_assoc_likelihood(self, measurement, target_index, meas_noise_cov):
+		"""
+			When caching likelihoods, we assume that there are never two separate measurements 
+			with identical measurement values and different scores (seems safe)
+		"""
 
-		if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
-			return self.assoc_likelihood_cache[(measurement[0], measurement[1], meas_noise_cov[0][0],
-												meas_noise_cov[0][1], meas_noise_cov[1][0], meas_noise_cov[1][1],
-												target_index)]
+
+		global CACHED_LIKELIHOODS
+		global NOT_CACHED_LIKELIHOODS
+		if USE_CONSTANT_R:
+			if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
+				CACHED_LIKELIHOODS = CACHED_LIKELIHOODS + 1
+				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
+			else:
+				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
+				target = self.targets.living_targets[target_index]
+				S = np.dot(np.dot(H, target.P), H.T) + R_default
+				assert(target.x.shape == (4, 1))
+		
+				state_mean_meas_space = np.dot(H, target.x)
+				#print type(state_mean_meas_space)
+				#print state_mean_meas_space
+				state_mean_meas_space = np.squeeze(state_mean_meas_space)
+
+				if USE_PYTHON_GAUSSIAN:
+					distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
+					assoc_likelihood = distribution.pdf(measurement)
+				else:
+
+#					S_det = np.linalg.det(S)
+					S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
+					S_inv = inv(S)
+					LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**2*S_det)
+
+					offset = measurement - state_mean_meas_space
+					a = -.5*np.dot(np.dot(offset, S_inv), offset)
+					assoc_likelihood = LIKELIHOOD_DISTR_NORM*math.exp(a)
+
+
+
+				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = assoc_likelihood
+				return assoc_likelihood
+
 		else:
-			target = self.targets.living_targets[target_index]
-			S = np.dot(np.dot(H, target.P), H.T) + meas_noise_cov
-			assert(target.x.shape == (4, 1))
-	
-			state_mean_meas_space = np.dot(H, target.x)
-			#print type(state_mean_meas_space)
-			#print state_mean_meas_space
-			state_mean_meas_space = np.squeeze(state_mean_meas_space)
-			distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
+			if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
+				CACHED_LIKELIHOODS = CACHED_LIKELIHOODS + 1
+				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
 
-			assoc_likelihood = distribution.pdf(measurement)
-			self.assoc_likelihood_cache[(measurement[0], measurement[1], meas_noise_cov[0][0],
-												meas_noise_cov[0][1], meas_noise_cov[1][0], meas_noise_cov[1][1],
-												target_index)] = assoc_likelihood
-			return assoc_likelihood
+			else:
+				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
+				target = self.targets.living_targets[target_index]
+				S = np.dot(np.dot(H, target.P), H.T) + meas_noise_cov
+				assert(target.x.shape == (4, 1))
+		
+				state_mean_meas_space = np.dot(H, target.x)
+				#print type(state_mean_meas_space)
+				#print state_mean_meas_space
+				state_mean_meas_space = np.squeeze(state_mean_meas_space)
+				if USE_PYTHON_GAUSSIAN:
+					distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
+					assoc_likelihood = distribution.pdf(measurement)
+				else:
+
+##					S_det = np.linalg.det(S)
+
+					S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
+					S_inv = inv(S)
+					LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**2*S_det)
+
+					offset = measurement - state_mean_meas_space
+					a = -.5*np.dot(np.dot(offset, S_inv), offset)
+					assoc_likelihood = LIKELIHOOD_DISTR_NORM*math.exp(a)
+
+				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = assoc_likelihood
+				return assoc_likelihood
 
 	def debug_target_creation(self):
 		print
@@ -1265,12 +1325,19 @@ print n_frames
 print sequence_name     
 assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 #for seq_idx in range(len(measurementTargetSetsBySequence)):
-for seq_idx in range(0,1):
+t0 = time.time()
+for seq_idx in SEQUENCES_TO_PROCESS:
 	print "Processing sequence: ", seq_idx
-#	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-	estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+#	estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
 	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
 											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
+t1 = time.time()
+
+print "Cached likelihoods = ", CACHED_LIKELIHOODS
+print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+print "RBPF runtime = ", t1-t0
+eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 
 
 #test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
