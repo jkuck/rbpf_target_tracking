@@ -116,10 +116,12 @@ p_birth_likelihood = 1.0/float(1242*375)
 # 					  [0,          10, 			 0, 0],
 # 					  [0, 			0, 17.86392672, 0],
 # 					  [0, 			0, 			 0, 3]])
-P_default = np.array([[40.64558317, 0, 			 0, 0],
- 					  [0,          10, 			 0, 0],
- 					  [0, 			0, 5.56278505, 0],
- 					  [0, 			0, 			 0, 3]])
+P_default = np.array([[40.64558317, 0, 			 0, 0, 0, 0],
+ 					  [0,          10, 			 0, 0, 0, 0],
+ 					  [0, 			0,  5.56278505, 0, 0, 0],
+ 					  [0, 			0, 			 0, 3, 0, 0],
+ 					  [0, 			0, 			 0, 0, 90, 0],
+ 					  [0, 			0, 			 0, 0, 0, 20]])
 
 #regionlet detection with score > 2.0:
 #from learn_params
@@ -136,10 +138,13 @@ R_default = np.array([[ 40.64558317,   0.14036472],
 # 					  [ -4.01491901,  -3.56066467,   4.59923143,   5.19622064],
 # 					  [ -8.5737873 ,  -8.07744876,   5.19622064,   6.10733628]])
 #also learned from all GT
-Q_default = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.22813535],
- 					  [ 102.95992102,  179.84877761,  -13.37640528,   -9.70601621],
- 					  [  -5.50458177,  -13.37640528,    4.56034398,    9.48945108],
- 					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314]])
+Q_default = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.22813535, 0.0, 0.0],
+ 					  [ 102.95992102,  179.84877761,  -13.37640528,   -9.70601621, 0.0, 0.0],
+ 					  [  -5.50458177,  -13.37640528,    4.56034398,    9.48945108, 0.0, 0.0],
+ 					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314, 0.0, 0.0],
+ 					  [  		 0.0,           0.0,           0.0,           0.0, 30.0, 30.0],
+ 					  [  		 0.0,           0.0,           0.0,           0.0, 30.0, 30.0],
+ 			])
 
 #measurement function matrix
 H = np.array([[1.0,  0.0, 0.0, 0.0, 0.0, 0.0],
@@ -193,13 +198,13 @@ class Target:
 			self.x = np.array([[position], [velocity]])
 			self.P = P_default
 		else:
-			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [width], height])
+			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [width], [height]])
 			self.P = P_default
 
 		self.width = width
 		self.height = height
 
-		assert(self.x.shape == (6, 1))
+		assert(self.x.shape == (6, 1)), self.x.shape
 		self.birth_time = cur_time
 		#Time of the last measurement data association with this target
 		self.last_measurement_association = cur_time
@@ -236,8 +241,8 @@ class Target:
 		"""
 		reformat_meas = np.array([[measurement[0]],
 								  [measurement[1]],
-								  [measurement[2],
-								  [measurement[3]])
+								  [measurement[2]],
+								  [measurement[3]]])
 		assert(self.x.shape == (6, 1))
 		if USE_CONSTANT_R:
 			S = np.dot(np.dot(H, self.P), H.T) + R_default
@@ -269,7 +274,7 @@ class Target:
 		      		  [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
                       [0.0, 0.0, 1.0,  dt, 0.0, 0.0],
                       [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                      [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+                      [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
                       [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
 		x_predict = np.dot(F, self.x)
 		P_predict = np.dot(np.dot(F, self.P), F.T) + Q_default
@@ -283,7 +288,7 @@ class Target:
 #			print '!'*40, "TARGET IS OFFSCREEN", '!'*40
 			self.offscreen = True
 
-		assert(self.x.shape == (4, 1))
+		assert(self.x.shape == (6, 1))
 
 
 
@@ -936,10 +941,10 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 					assoc_likelihood = distribution.pdf(measurement)
 				else:
 
-#					S_det = np.linalg.det(S)
-					S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
+					S_det = np.linalg.det(S)
+#					S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
 					S_inv = inv(S)
-					LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**2*S_det)
+					LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**4*S_det)
 
 					offset = measurement - state_mean_meas_space
 					a = -.5*np.dot(np.dot(offset, S_inv), offset)
@@ -966,7 +971,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
 				target = self.targets.living_targets[target_index]
 				S = np.dot(np.dot(H, target.P), H.T) + meas_noise_cov
-				assert(target.x.shape == (4, 1))
+				assert(target.x.shape == (6, 1))
 		
 				state_mean_meas_space = np.dot(H, target.x)
 				#print type(state_mean_meas_space)
@@ -977,11 +982,11 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 					assoc_likelihood = distribution.pdf(measurement)
 				else:
 
-##					S_det = np.linalg.det(S)
+					S_det = np.linalg.det(S)
 
-					S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
+#					S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
 					S_inv = inv(S)
-					LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**2*S_det)
+					LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**4*S_det)
 
 					offset = measurement - state_mean_meas_space
 					a = -.5*np.dot(np.dot(offset, S_inv), offset)

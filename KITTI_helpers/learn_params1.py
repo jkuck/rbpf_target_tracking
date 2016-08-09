@@ -93,6 +93,9 @@ class gtObject:
         self.x2 = x2
         self.y2 = y2
 
+        self.width = x2-x1
+        self.height = y2-y1
+
         #id of the track this object belongs to
         self.track_id = track_id
 
@@ -120,6 +123,10 @@ class detObject:
         self.y1 = y1
         self.x2 = x2
         self.y2 = y2
+
+        self.width = x2-x1
+        self.height = y2-y1
+
 
         # _id of the ground truth track this detection is associated with
         # --OR--
@@ -1079,6 +1086,37 @@ def apply_function_on_intervals(score_cutoffs, function):
 
     return function_on_intervals
 
+class MultiDetections:
+    def __init__(self, gt_objects, det_objects1, det_objects2):
+        self.gt_objects = gt_objects
+        self.det_objects1 = det_objects1
+        self.det_objects2 = det_objects2
+        self.store_associations_in_gt()
+
+    def store_associations_in_gt(self):
+        """
+        Store a reference to associated detections in every associated ground truth object
+        """
+        assert(len(self.gt_objects) == len(self.det_objects))
+        for seq_idx in range(len(self.gt_objects)):
+            assert(len(self.gt_objects[seq_idx]) == len(self.det_objects[seq_idx]))
+            for frame_idx in range(len(self.gt_objects[seq_idx])):
+                for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
+                    if self.det_objects[seq_idx][frame_idx][det_idx].assoc != -1:
+                        match_found = False
+                        #gt track_id this detection is associated with
+                        cur_det_assoc = self.det_objects[seq_idx][frame_idx][det_idx].assoc 
+                        cur_det = self.det_objects[seq_idx][frame_idx][det_idx]
+                        for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                            if self.gt_objects[seq_idx][frame_idx][gt_idx].track_id == cur_det_assoc:
+                                #we found the ground truth-detection match
+                                assert(match_found == False)
+                                match_found = True
+                                self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = cur_det
+                        assert(match_found == True)
+
+
+
 class AllData:
     def __init__(self, gt_objects, det_objects):
         self.gt_objects = gt_objects
@@ -1309,9 +1347,13 @@ class AllData:
                         self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.score < max_score):
 
                             gt_pos = np.array([self.gt_objects[seq_idx][frame_idx][gt_idx].x, 
-                                               self.gt_objects[seq_idx][frame_idx][gt_idx].y])
+                                               self.gt_objects[seq_idx][frame_idx][gt_idx].y,
+                                               self.gt_objects[seq_idx][frame_idx][gt_idx].width,
+                                               self.gt_objects[seq_idx][frame_idx][gt_idx].height])
                             meas_pos = np.array([self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.x, 
-                                                 self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.y])
+                                                 self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.y,
+                                                 self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.width,
+                                                 self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.height])
                             meas_errors.append(meas_pos - gt_pos)
 
         meas_noise_cov = np.cov(np.asarray(meas_errors).T)
@@ -1396,9 +1438,10 @@ def get_meas_target_set(score_intervals, det_method = "lsvm", obj_class = "car",
             for meas_idx in range(len(det_objects[seq_idx][frame_idx])):
                 cur_meas = det_objects[seq_idx][frame_idx][meas_idx]
 
-                meas_pos = np.array([cur_meas.x, cur_meas.y])
                 meas_width = cur_meas.x2 - cur_meas.x1
                 meas_height = cur_meas.y2 - cur_meas.y1
+                meas_pos = np.array([cur_meas.x, cur_meas.y, meas_width, meas_height])
+
 #                cur_frame_measurements.val.append(meas_pos)
 #                cur_frame_measurements.widths.append(meas_width)
 #                cur_frame_measurements.heights.append(meas_height)
