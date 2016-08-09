@@ -1079,6 +1079,37 @@ def apply_function_on_intervals(score_cutoffs, function):
 
     return function_on_intervals
 
+class MultiDetections:
+    def __init__(self, gt_objects, det_objects1, det_objects2):
+        self.gt_objects = gt_objects
+        self.det_objects1 = det_objects1
+        self.det_objects2 = det_objects2
+        self.store_associations_in_gt()
+
+    def store_associations_in_gt(self):
+        """
+        Store a reference to associated detections in every associated ground truth object
+        """
+        assert(len(self.gt_objects) == len(self.det_objects))
+        for seq_idx in range(len(self.gt_objects)):
+            assert(len(self.gt_objects[seq_idx]) == len(self.det_objects[seq_idx]))
+            for frame_idx in range(len(self.gt_objects[seq_idx])):
+                for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
+                    if self.det_objects[seq_idx][frame_idx][det_idx].assoc != -1:
+                        match_found = False
+                        #gt track_id this detection is associated with
+                        cur_det_assoc = self.det_objects[seq_idx][frame_idx][det_idx].assoc 
+                        cur_det = self.det_objects[seq_idx][frame_idx][det_idx]
+                        for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                            if self.gt_objects[seq_idx][frame_idx][gt_idx].track_id == cur_det_assoc:
+                                #we found the ground truth-detection match
+                                assert(match_found == False)
+                                match_found = True
+                                self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = cur_det
+                        assert(match_found == True)
+
+
+
 class AllData:
     def __init__(self, gt_objects, det_objects):
         self.gt_objects = gt_objects
