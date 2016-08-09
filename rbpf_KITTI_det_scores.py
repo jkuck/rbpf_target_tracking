@@ -142,8 +142,10 @@ Q_default = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.2281353
  					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314]])
 
 #measurement function matrix
-H = np.array([[1.0,  0.0, 0.0, 0.0],
-              [0.0,  0.0, 1.0, 0.0]])	
+H = np.array([[1.0,  0.0, 0.0, 0.0, 0.0, 0.0],
+              [0.0,  0.0, 1.0, 0.0, 0.0, 0.0],
+              [0.0,  0.0, 0.0, 0.0, 1.0, 0.0],
+              [0.0,  0.0, 0.0, 0.0, 0.0, 1.0]])	
 
 USE_LEARNED_DEATH_PROBABILITIES = True
 
@@ -191,13 +193,13 @@ class Target:
 			self.x = np.array([[position], [velocity]])
 			self.P = P_default
 		else:
-			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0]])
+			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [width], height])
 			self.P = P_default
 
 		self.width = width
 		self.height = height
 
-		assert(self.x.shape == (4, 1))
+		assert(self.x.shape == (6, 1))
 		self.birth_time = cur_time
 		#Time of the last measurement data association with this target
 		self.last_measurement_association = cur_time
@@ -233,8 +235,10 @@ class Target:
 !!!!!!!!!PREDICTION HAS BEEN RUN AT THE BEGINNING OF TIME STEP FOR EVERY TARGET!!!!!!!!!
 		"""
 		reformat_meas = np.array([[measurement[0]],
-								  [measurement[1]]])
-		assert(self.x.shape == (4, 1))
+								  [measurement[1]],
+								  [measurement[2],
+								  [measurement[3]])
+		assert(self.x.shape == (6, 1))
 		if USE_CONSTANT_R:
 			S = np.dot(np.dot(H, self.P), H.T) + R_default
 		else:
@@ -249,7 +253,7 @@ class Target:
 		self.width = width
 		self.height = height
 		assert(self.all_time_stamps[-1] == cur_time and self.all_time_stamps[-2] != cur_time)
-		assert(self.x.shape == (4, 1)), (self.x.shape, np.dot(K, residual).shape)
+		assert(self.x.shape == (6, 1)), (self.x.shape, np.dot(K, residual).shape)
 
 		self.all_states[-1] = (self.x, self.width, self.height)
 
@@ -261,10 +265,12 @@ class Target:
 			-cur_time: the time the prediction is made for
 		"""
 		assert(self.all_time_stamps[-1] == (cur_time - dt))
-		F = np.array([[1.0,  dt, 0.0, 0.0],
-		      		  [0.0, 1.0, 0.0, 0.0],
-                      [0.0, 0.0, 1.0,  dt],
-                      [0.0, 0.0, 0.0, 1.0]])
+		F = np.array([[1.0,  dt, 0.0, 0.0, 0.0, 0.0],
+		      		  [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                      [0.0, 0.0, 1.0,  dt, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+                      [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
 		x_predict = np.dot(F, self.x)
 		P_predict = np.dot(np.dot(F, self.P), F.T) + Q_default
 		self.x = x_predict
@@ -918,7 +924,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
 				target = self.targets.living_targets[target_index]
 				S = np.dot(np.dot(H, target.P), H.T) + R_default
-				assert(target.x.shape == (4, 1))
+				assert(target.x.shape == (6, 1))
 		
 				state_mean_meas_space = np.dot(H, target.x)
 				#print type(state_mean_meas_space)
