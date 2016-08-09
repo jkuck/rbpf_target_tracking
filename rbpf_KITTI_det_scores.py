@@ -39,7 +39,7 @@ SEQUENCES_TO_PROCESS = [0]
 #eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
-N_PARTICLES = 100 #number of particles used in the particle filter
+N_PARTICLES = 5000 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
@@ -51,7 +51,7 @@ USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially
 default_time_step = .1 
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
@@ -114,22 +114,22 @@ p_birth_likelihood = 1.0/float(1242*375)
 
 #Kalman filter defaults
 #Think about doing this in a more principled way!!!
-#P_default = np.array([[57.54277774, 0, 			 0, 0],
-# 					  [0,          10, 			 0, 0],
-# 					  [0, 			0, 17.86392672, 0],
-# 					  [0, 			0, 			 0, 3]])
-P_default = np.array([[40.64558317, 0, 			 0, 0],
+P_default = np.array([[57.54277774, 0, 			 0, 0],
  					  [0,          10, 			 0, 0],
- 					  [0, 			0, 5.56278505, 0],
+ 					  [0, 			0, 17.86392672, 0],
  					  [0, 			0, 			 0, 3]])
+#P_default = np.array([[40.64558317, 0, 			 0, 0],
+# 					  [0,          10, 			 0, 0],
+# 					  [0, 			0, 5.56278505, 0],
+# 					  [0, 			0, 			 0, 3]])
 
 #regionlet detection with score > 2.0:
 #from learn_params
-#R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
-# 					  [ -3.60666228e-02,   1.64772050e+01]])
+R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+ 					  [ -3.60666228e-02,   1.64772050e+01]])
 #from learn_params1, not counting 'ignored' ground truth
-R_default = np.array([[ 40.64558317,   0.14036472],
- 					  [  0.14036472,   5.56278505]])
+#R_default = np.array([[ 40.64558317,   0.14036472],
+# 					  [  0.14036472,   5.56278505]])
 
 
 #learned from all GT
@@ -1349,7 +1349,7 @@ print "Cached likelihoods = ", CACHED_LIKELIHOODS
 print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
 print "RBPF runtime = ", t1-t0
 eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
-
+print "USE_CONSTANT_R = ", USE_CONSTANT_R
 
 #test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
 #test_target_set.write_targets_to_KITTI_format(num_frames = 154, filename = 'test_read_write_0000_results.txt')
