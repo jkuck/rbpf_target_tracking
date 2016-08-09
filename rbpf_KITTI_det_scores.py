@@ -50,7 +50,7 @@ USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-REPLACE_STATE_WITH_MEAUREMENT_AFTER_KF_UPDATE = True
+REPLACE_STATE_WITH_MEAUREMENT_AFTER_KF_UPDATE = False
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
 USE_CONSTANT_R = False
