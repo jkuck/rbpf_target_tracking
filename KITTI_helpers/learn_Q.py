@@ -14,11 +14,12 @@ NUM_TIME_STEPS = 100
 
 #Kalman filter defaults
 #P_default = meas_sigma**2 #this may not be a reasonable/valid thing to do
-P_default = np.array([[meas_sigma**2, 0, 0, 0],
- 					  [0,             10, 0, 0],
-                      [0, 0, meas_sigma**2, 0],
-                      [0, 0, 0,             10]])
-
+P_default = np.array([[40.64558317, 0, 			 0, 0, 0, 0],
+ 					  [0,          10, 			 0, 0, 0, 0],
+ 					  [0, 			0,  5.56278505, 0, 0, 0],
+ 					  [0, 			0, 			 0, 3, 0, 0],
+ 					  [0, 			0, 			 0, 0, 90, 0],
+ 					  [0, 			0, 			 0, 0, 0, 20]])
 
 #P_default = np.array([[ 4888.46193689,  3252.85225574,  -139.60283818,  -684.35206995],
 # [ 3252.85225574,  2165.89830482,  -103.43734755,  -462.74360811],
@@ -37,8 +38,10 @@ P_default = np.array([[meas_sigma**2, 0, 0, 0],
 # 					  [  0, 10]])
 
 #R_default = np.array([[meas_sigma**2]])
-R_default = np.array([[0.0, 0.0],
-                      [0.0, 0.0]])
+R_default = np.array([[0.0, 0.0, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0],
+					  [0.0, 0.0, 0.0, 0.0]])
 #Q_default_gt = np.array([[ 0.04227087,  0.02025365],
 # 					  [ 0.02025365,  0.00985709]])
 #Q_default_gt = Q_default_gt/20.0 #just from testing seems to give good RMSE with clutter
@@ -47,10 +50,12 @@ R_default = np.array([[0.0, 0.0],
 #Q_default_gt = np.array([[1.0/3.0*default_time_step**3, 1.0/2.0*default_time_step**2],
 # 					  [1.0/2.0*default_time_step**2, default_time_step]])
 #Q_default_gt *= process_noise_spectral_density
-Q_default_gt = np.array([[1.0, 0.0, 0.0, 0.0],
- 					     [0.0, 0.5, 0.0, 0.0],
-                         [0.0, 0.0, 1.0, 0.0],
-                         [0.0, 0.0, 0.0, 0.5]])
+Q_default_gt = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.22813535, 0.0, 0.0],
+ 					  [ 102.95992102,  179.84877761,  -13.37640528,   -9.70601621, 0.0, 0.0],
+ 					  [  -5.50458177,  -13.37640528,    4.56034398,    9.48945108, 0.0, 0.0],
+ 					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314, 0.0, 0.0],
+ 					  [  		 0.0,           0.0,           0.0,           0.0, 30.0, 30.0],
+ 					  [  		 0.0,           0.0,           0.0,           0.0, 30.0, 30.0],])
 
 #initial estimate of Q when trying to learn from data
 #Q_init_estimate = np.array([[.50, .0050],
@@ -62,7 +67,7 @@ Q_default_gt = np.array([[1.0, 0.0, 0.0, 0.0],
 #                            [0.0, 0.0, 1.0, 0.0],
 #                            [0.0, 0.0, 0.0, 1.0]])
 
-Q_init_helper = np.random.rand(4,4)
+Q_init_helper = np.random.rand(6,6)
 Q_init_estimate = np.dot(Q_init_helper.T, Q_init_helper)
 #Q_init_estimate = Q_default_gt
 
@@ -72,17 +77,20 @@ Q_init_estimate = np.dot(Q_init_helper.T, Q_init_helper)
 #Q_default_gt *= process_noise_spectral_density
 
 #measurement function matrix
-H = np.array([[1.0,  0.0, 0.0, 0.0],
-              [0.0,  0.0, 1.0, 0.0]])	
+H = np.array([[1.0,  0.0, 0.0, 0.0, 0.0, 0.0],
+              [0.0,  0.0, 1.0, 0.0, 0.0, 0.0],
+              [0.0,  0.0, 0.0, 0.0, 1.0, 0.0],
+              [0.0,  0.0, 0.0, 0.0, 0.0, 1.0]])	
+
 
 
 
 class Target:
 	def __init__(self, measurement):
-		self.x = np.array([[measurement[0]], [0], [measurement[1]], [0]])
+		self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [measurement[2]], [measurement[3]]])
 		self.P = P_default
 
-		assert(self.x.shape == (4, 1))
+		assert(self.x.shape == (6, 1))
 		#Time of the last measurement data association with this target
 		self.death_prob = -1 #calculate at every time instance
 
@@ -111,17 +119,17 @@ class Target:
 		- measurement: the measurement (numpy array)
 !!!!!!!!!PREDICTION HAS BEEN RUN AT THE BEGINNING OF TIME STEP FOR EVERY TARGET!!!!!!!!!
 		"""
-		assert(self.x.shape == (4, 1))
+		assert(self.x.shape == (6, 1))
 		S = np.dot(np.dot(H, self.P), H.T) + R_default
 		K = np.dot(np.dot(self.P, H.T), inv(S))
 		residual = measurement - np.dot(H, self.x)
-		assert(np.dot(H, self.x).shape == (2,1)), (np.dot(H, self.x).shape, H.shape, self.x.shape, measurement.shape)
+		assert(np.dot(H, self.x).shape == (4,1)), (np.dot(H, self.x).shape, H.shape, self.x.shape, measurement.shape)
 		updated_x = self.x + np.dot(K, residual)
 	#	updated_self.P = np.dot((np.eye(self.P.shape[0]) - np.dot(K, H)), self.P) #NUMERICALLY UNSTABLE!!!!!!!!
 		updated_P = self.P - np.dot(np.dot(K, S), K.T) #not sure if this is numerically stable!!
 		self.x = updated_x
 		self.P = updated_P
-		assert(self.x.shape == (4, 1)), (self.x.shape, np.dot(K, residual).shape, measurement.shape, S.shape, K.shape, residual.shape, np.dot(H, self.x).shape)
+		assert(self.x.shape == (6, 1)), (self.x.shape, np.dot(K, residual).shape, measurement.shape, S.shape, K.shape, residual.shape, np.dot(H, self.x).shape)
 
 		self.all_states[-1] = self.x
 		self.all_updated_states.append(self.x)
@@ -132,10 +140,12 @@ class Target:
 		Inputs:
 			-dt: time step to run prediction on
 		"""
-		F = np.array([[1.0,  dt, 0.0, 0.0],
-		      		  [0.0, 1.0, 0.0, 0.0],
-                      [0.0, 0.0, 1.0,  dt],
-                      [0.0, 0.0, 0.0, 1.0]])
+		F = np.array([[1.0,  dt, 0.0, 0.0, 0.0, 0.0],
+		      		  [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                      [0.0, 0.0, 1.0,  dt, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
 		x_predict = np.dot(F, self.x)
 		P_predict = np.dot(np.dot(F, self.P), F.T) + Q_estimate
 		self.x = x_predict
@@ -143,15 +153,18 @@ class Target:
 		self.all_states.append(self.x)
 		self.all_predicted_states.append(self.x)
 		self.all_predicted_P.append(self.P)
-		assert(self.x.shape == (4, 1))
+		assert(self.x.shape == (6, 1))
 #		print self.P
 
 
 	def data_gen_update_state(self):
-		F = np.array([[1.0,  default_time_step, 0.0,               0.0],
-		        [0.0,               	   1.0, 0.0,               0.0],
-		        [0.0,               	  0.0 , 1.0,  default_time_step],
-        		[0.0,               	  0.0 , 0.0,               1.0]])
+		dt = default_time_step
+		F = np.array([[1.0,  dt, 0.0, 0.0, 0.0, 0.0],
+		      		  [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                      [0.0, 0.0, 1.0,  dt, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                      [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
 		process_noise = np.random.multivariate_normal(np.zeros(Q_default_gt.shape[0]), Q_default_gt)
 		process_noise = np.expand_dims(process_noise, axis=1)
 		self.x = np.dot(F, self.x) + process_noise 
