@@ -525,12 +525,19 @@ class Particle:
 
 
 
-	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_list, cur_time, measurement_scores):
+	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, regionlets_measurement_list, \
+		lsvm_measurement_list, cur_time, regionlets_measurement_scores, lsvm_measurement_scores):
 		"""
 		Input:
 		- measurement_list: a list of all measurements from the current time instance
 		Output:
-		- measurement_associations: A list of association values for each measurement.  Values of c correspond to:
+		- regionlets_associations: A list of association values for each regionlets measurement.  Values of c correspond to:
+			c[i] = -1 -> ith measurement is clutter
+			c[i] = self.targets.living_count -> ith measurement is a new target
+			c[i] in range [0, self.targets.living_count-1] -> ith measurement is of
+				particle.targets.living_targets[c[i]]
+
+		- lsvm_associations: A list of association values for each lsvm measurement.  Values of c correspond to:
 			c[i] = -1 -> ith measurement is clutter
 			c[i] = self.targets.living_count -> ith measurement is a new target
 			c[i] in range [0, self.targets.living_count-1] -> ith measurement is of
@@ -551,8 +558,9 @@ class Particle:
 			assert(p_target_deaths[len(p_target_deaths) - 1] >= 0 and p_target_deaths[len(p_target_deaths) - 1] <= 1)
 
 
-		(targets_to_kill, measurement_associations, proposal_probability, unassociated_target_death_probs) = \
-			self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths, cur_time, measurement_scores)
+		(targets_to_kill, regionlets_associations, lsvm_associations, proposal_probability, unassociated_target_death_probs) = \
+			self.sample_proposal_distr3(regionlets_measurement_list, lsvm_measurement_list, self.targets.living_count, 
+										p_target_deaths, cur_time, regionlets_measurement_scores, lsvm_measurement_scores)
 
 
 		living_target_indices = []
@@ -563,8 +571,17 @@ class Particle:
 #		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
 #												 measurement_associations, p_target_deaths)
 
-		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
-												 measurement_associations, unassociated_target_death_probs, measurement_scores, SCORE_INTERVALS)
+		exact_regionlets_assoc_prob = self.get_exact_prob_hidden_and_data(regionlets_measurement_list, 
+			living_target_indices, self.targets.living_count, regionlets_associations,\
+			unassociated_target_death_probs, regionlets_measurement_scores, REGIONLETS_SCORE_INTERVALS)
+
+		exact_lsvm_assoc_prob = self.get_exact_prob_hidden_and_data(lsvm_measurement_list, 
+			living_target_indices, self.targets.living_count, lsvm_associations,\
+			unassociated_target_death_probs, lsvm_measurement_scores, LSVM_SCORE_INTERVALS)
+
+		exact_death_prob = self.calc_death_prior(living_target_indices, p_target_deaths):
+
+		exact_probability = exact_regionlets_assoc_prob * exact_lsvm_assoc_prob * exact_death_prob
 
 		assert(num_targs == self.targets.living_count)
 		#double check targets_to_kill is sorted
@@ -574,9 +591,11 @@ class Particle:
 
 		assert(imprt_re_weight != 0.0), (exact_probability, proposal_probability)
 
-		return (measurement_associations, targets_to_kill, imprt_re_weight)
+		return (regionlets_associations, lsvm_associations, targets_to_kill, imprt_re_weight)
 
-	def sample_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths, cur_time, measurement_scores):
+
+	def associate_measurements_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths, measurement_scores):
+
 		"""
 		Try sampling associations with each measurement sequentially
 		Input:
@@ -587,7 +606,6 @@ class Particle:
 			time instance and the current time instance
 
 		Output:
-		- targets_to_kill: a list of targets that have been sampled to die (not killed yet)
 		- list_of_measurement_associations: list of associations for each measurement
 		- proposal_probability: proposal probability of the sampled deaths and assocations
 			
@@ -654,12 +672,41 @@ class Particle:
 
 			remaining_meas_count -= 1
 		assert(remaining_meas_count == 0)
+		return(list_of_measurement_associations, proposal_probability)
+
+	def sample_proposal_distr3(self, regionlets_measurement_list, lsvm_measurement_list, total_target_count, 
+							   p_target_deaths, cur_time, regionlets_measurement_scores, lsvm_measurement_scores):
+		"""
+		Try sampling associations with each measurement sequentially
+		Input:
+		- measurement_list: a list of all measurements from the current time instance
+		- total_target_count: the number of living targets on the previous time instace
+		- p_target_deaths: a list of length len(total_target_count) where 
+			p_target_deaths[i] = the probability that target i has died between the last
+			time instance and the current time instance
+
+		Output:
+		- targets_to_kill: a list of targets that have been sampled to die (not killed yet)
+		- list_of_regionlets_associations: list of associations for each regionlets measurement
+		- list_of_lsvm_associations: list of associations for each lsvm measurement
+		- proposal_probability: proposal probability of the sampled deaths and assocations
+			
+		"""
+		(list_of_regionlets_associations, regionlets_proposal_prob) = self.associate_measurements_proposal_distr3\
+			(regionlets_measurement_list, total_target_count, p_target_deaths, regionlets_measurement_scores)
+
+		(list_of_lsvm_associations, lsvm_proposal_prob) = self.associate_measurements_proposal_distr3\
+			(lsvm_measurement_list, total_target_count, p_target_deaths, lsvm_measurement_scores)
+
+		proposal_probability = regionlets_proposal_prob*lsvm_proposal_prob
+
+
 ############################################################################################################
 		#sample target deaths from unassociated targets
 		unassociated_targets = []
 		unassociated_target_death_probs = []
 		for i in range(total_target_count):
-			if(not i in list_of_measurement_associations):
+			if (not i in list_of_regionlets_associations) and (not i in list_of_lsvm_associations):
 				unassociated_targets.append(i)
 				unassociated_target_death_probs.append(p_target_deaths[i])
 			else:
@@ -679,11 +726,14 @@ class Particle:
 
 		#debug
 		for i in range(total_target_count):
-			assert(list_of_measurement_associations.count(i) == 0 or \
-				   list_of_measurement_associations.count(i) == 1), (list_of_measurement_associations,  measurement_list, total_target_count, p_target_deaths)
+			assert(list_of_regionlets_associations.count(i) == 0 or \
+				   list_of_regionlets_associations.count(i) == 1), (list_of_regionlets_associations,  measurement_list, total_target_count, p_target_deaths)
+		for i in range(total_target_count):
+			assert(list_of_lsvm_associations.count(i) == 0 or \
+				   list_of_lsvm_associations.count(i) == 1), (list_of_lsvm_associations,  measurement_list, total_target_count, p_target_deaths)
 		#done debug
 
-		return (targets_to_kill, list_of_measurement_associations, proposal_probability, unassociated_target_death_probs)
+		return (targets_to_kill, list_of_regionlets_associations, list_of_lsvm_associations, proposal_probability, unassociated_target_death_probs)
 
 
 	def sample_target_deaths_proposal3(self, unassociated_targets, cur_time):
@@ -715,13 +765,24 @@ class Particle:
 					probability_of_deaths *= (1 - cur_death_prob)
 		return (targets_to_kill, probability_of_deaths)
 
+	def calc_death_prior(self, living_target_indices, p_target_deaths):
+		death_prior = 1.0
+		for (cur_target_index, cur_target_death_prob) in enumerate(p_target_deaths):
+			if cur_target_index in living_target_indices:
+				death_prior *= (1.0 - cur_target_death_prob)
+				assert((1.0 - cur_target_death_prob) != 0.0), cur_target_death_prob
+			else:
+				death_prior *= cur_target_death_prob
+				assert((cur_target_death_prob) != 0.0), cur_target_death_prob
 
+		return death_prior
 
 	def get_prior(self, living_target_indices, total_target_count, number_measurements, 
 				 measurement_associations, p_target_deaths, target_emission_probs, 
 				 birth_count_priors, clutter_count_priors, measurement_scores, score_intervals):
 		"""
 DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
+		REDOCUMENT
 
 		Input: 
 		- living_target_indices: a list of indices of targets from last time instance that are still alive
@@ -741,17 +802,6 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			clutter_count_prior[i] = the probability of i clutter measurements during 
 			any time instance
 		"""
-		def calc_death_prior(living_target_indices, p_target_deaths):
-			death_prior = 1.0
-			for (cur_target_index, cur_target_death_prob) in enumerate(p_target_deaths):
-				if cur_target_index in living_target_indices:
-					death_prior *= (1.0 - cur_target_death_prob)
-					assert((1.0 - cur_target_death_prob) != 0.0), cur_target_death_prob
-				else:
-					death_prior *= cur_target_death_prob
-					assert((cur_target_death_prob) != 0.0), cur_target_death_prob
-
-			return death_prior
 
 		def nCr(n,r):
 		    return math.factorial(n) / math.factorial(r) / math.factorial(n-r)
@@ -860,11 +910,13 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		total_prior = death_prior * assoc_prior
 		assert(total_prior != 0.0), (death_prior, assoc_prior)
-		return total_prior
+#		return total_prior
+		return assoc_prior
 
 	def get_exact_prob_hidden_and_data(self, measurement_list, living_target_indices, total_target_count,
 									   measurement_associations, p_target_deaths, measurement_scores, score_intervals):
 		"""
+		REDOCUMENT, BELOW INCORRECT, not including death probability now
 		Calculate p(data, associations, #measurements, deaths) as:
 		p(data|deaths, associations, #measurements)*p(deaths)*p(associations, #measurements|deaths)
 		Input:
@@ -1023,8 +1075,9 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		birth_value = self.targets.living_count
 
-		(measurement_associations, dead_target_indices, imprt_re_weight) = \
-			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurements, cur_time, measurement_scores)
+		(regionlets_associations, lsvm_associations, dead_target_indices, imprt_re_weight) = \
+			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(regionlets_measurement_list, \
+				lsvm_measurement_list, cur_time, regionlets_measurement_scores, lsvm_measurement_scores)
 		assert(len(measurement_associations) == len(measurements))
 		assert(imprt_re_weight != 0.0), imprt_re_weight
 		self.importance_weight *= imprt_re_weight #update particle's importance weight
