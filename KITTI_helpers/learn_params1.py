@@ -100,6 +100,10 @@ class gtObject:
         #if this gtObject is associated with any detection
         self.associated_detection = None
 
+        if (x1 < 10 or x2 > CAMERA_PIXEL_WIDTH - 15 or y1 < 10 or y2 > CAMERA_PIXEL_HEIGHT - 15):
+            self.near_border = True
+        else:
+            self.near_border = False
 
 class detObject:
     def __init__(self, x1, x2, y1, y2, assoc, score):
@@ -1079,6 +1083,42 @@ def apply_function_on_intervals(score_cutoffs, function):
 
     return function_on_intervals
 
+def apply_function_on_intervals_2_det(score_cutoffs_det1, score_cutoffs_det2, function):
+    """
+    Input:
+    - score_cutoffs: a list specifying score intervals to calculate function on
+
+    Output:
+    - function_on_intervals: function_on_intervals is a list of length len(score_cutoffs)
+        function_on_intervals[i] contains the output of function applied on the interval:
+            * [score_cutoffs[i], score_cutoffs[i+1])  for i >= 0 and i < len(score_cutoffs) - 1
+            * [score_cutoffs[i], infinity)            for i == len(score_cutoffs) - 1
+
+    """
+    
+    function_on_det1_intervals = []
+
+    for i in range(len(score_cutoffs_det1) - 1):
+        cur_output = function(score_cutoffs_det1[i], score_cutoffs_det1[i+1], -float("inf"), float("inf"))
+        function_on_det1_intervals.append(cur_output[0])
+
+    i = len(score_cutoffs_det1) - 1
+    cur_output = function(score_cutoffs_det1[i], float("inf"), -float("inf"), float("inf"))
+    function_on_det1_intervals.append(cur_output[0])
+
+    
+    function_on_det2_intervals = []
+
+    for i in range(len(score_cutoffs_det2) - 1):
+        cur_output = function(-float("inf"), float("inf"), score_cutoffs_det2[i], score_cutoffs_det2[i+1])
+        function_on_det2_intervals.append(cur_output[1])
+
+    i = len(score_cutoffs_det2) - 1
+    cur_output = function(-float("inf"), float("inf"), score_cutoffs_det2[i], float("inf"))
+    function_on_det2_intervals.append(cur_output[1])
+
+    return (function_on_det1_intervals, function_on_det2_intervals)
+
 class MultiDetections:
     def __init__(self, gt_objects, det_objects1, det_objects2):
         self.gt_objects = gt_objects
@@ -1089,26 +1129,393 @@ class MultiDetections:
     def store_associations_in_gt(self):
         """
         Store a reference to associated detections in every associated ground truth object
+        Can have up to 2 detections associated with a ground truth here, so associations stored in a list
         """
-        assert(len(self.gt_objects) == len(self.det_objects))
+        assert(len(self.gt_objects) == len(self.det_objects1))
         for seq_idx in range(len(self.gt_objects)):
-            assert(len(self.gt_objects[seq_idx]) == len(self.det_objects[seq_idx]))
+            assert(len(self.gt_objects[seq_idx]) == len(self.det_objects1[seq_idx]))
             for frame_idx in range(len(self.gt_objects[seq_idx])):
-                for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
-                    if self.det_objects[seq_idx][frame_idx][det_idx].assoc != -1:
+                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
+                    if self.det_objects1[seq_idx][frame_idx][det_idx].assoc != -1:
                         match_found = False
                         #gt track_id this detection is associated with
-                        cur_det_assoc = self.det_objects[seq_idx][frame_idx][det_idx].assoc 
-                        cur_det = self.det_objects[seq_idx][frame_idx][det_idx]
+                        cur_det_assoc = self.det_objects1[seq_idx][frame_idx][det_idx].assoc 
+                        cur_det = self.det_objects1[seq_idx][frame_idx][det_idx]
                         for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                             if self.gt_objects[seq_idx][frame_idx][gt_idx].track_id == cur_det_assoc:
                                 #we found the ground truth-detection match
                                 assert(match_found == False)
                                 match_found = True
-                                self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = cur_det
+                                if self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection:
+                                    self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.append(cur_det)
+                                else:
+                                    self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = [cur_det]
+
                         assert(match_found == True)
 
+        assert(len(self.gt_objects) == len(self.det_objects2))
+        for seq_idx in range(len(self.gt_objects)):
+            assert(len(self.gt_objects[seq_idx]) == len(self.det_objects2[seq_idx]))
+            for frame_idx in range(len(self.gt_objects[seq_idx])):
+                for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
+                    if self.det_objects2[seq_idx][frame_idx][det_idx].assoc != -1:
+                        match_found = False
+                        #gt track_id this detection is associated with
+                        cur_det_assoc = self.det_objects2[seq_idx][frame_idx][det_idx].assoc 
+                        cur_det = self.det_objects2[seq_idx][frame_idx][det_idx]
+                        for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                            if self.gt_objects[seq_idx][frame_idx][gt_idx].track_id == cur_det_assoc:
+                                #we found the ground truth-detection match
+                                assert(match_found == False)
+                                match_found = True
+                                if self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection:
+                                    self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.append(cur_det)
+                                else:
+                                    self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = [cur_det]
 
+                        assert(match_found == True)
+
+    def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2):
+        """
+        Input:
+        - min_score_det_1: detections must have score >= min_score_det_1 to be considered
+        - max_score_det_1: detections must have score < max_score_det_1 to be considered
+        - min_score_det_2: detections must have score >= min_score_det_2 to be considered
+        - max_score_det_2: detections must have score < max_score_det_2 to be considered
+
+        Output:
+        - all_birth_probabilities: all_birth_probabilities[j] is 
+            (number of frames containing j birth measurements with scores in the range [min_score_det_1, max_score_det_1])
+            / (total number of frames)
+            where a "birth measurement" is a measurement of a ground truth target that has not been associated
+            with a detection (of any score value in this AllData instance) on any previous time instance
+        """
+        
+        total_frame_count = 0
+        #largest number of detection1 births in a single frame
+        max_birth_count1 = 0
+        #largest number of detection2 births in a single frame
+        max_birth_count2 = 0
+        #birth_count_dict[5] = 18 means that 18 frames contain 5 birth measurements
+        birth_count_dict_det1 = {}
+        birth_count_dict_det2 = {}
+        assert(len(self.det_objects1) == len(self.det_objects2))
+        for seq_idx in range(len(self.det_objects1)):
+            assert(len(self.det_objects1[seq_idx]) == len(self.det_objects2[seq_idx]))
+
+            #contains ids of all ground truth tracks that have been previously associated with a detection
+            previously_detected_gt_ids = []
+            for frame_idx in range(len(self.det_objects1[seq_idx])):
+                total_frame_count += 1
+                cur_frame_birth_count1 = 0
+                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
+                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_1 and \
+                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
+                            cur_frame_birth_count1 += 1
+                if cur_frame_birth_count1 > max_birth_count1:
+                    max_birth_count1 = cur_frame_birth_count1
+
+                if cur_frame_birth_count1 in birth_count_dict_det1:
+                    birth_count_dict_det1[cur_frame_birth_count1] += 1
+                else:
+                    birth_count_dict_det1[cur_frame_birth_count1] = 1
+
+                cur_frame_birth_count2 = 0
+                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
+                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
+                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_2):
+                            cur_frame_birth_count2 += 1
+                if cur_frame_birth_count2 > max_birth_count2:
+                    max_birth_count2 = cur_frame_birth_count2
+
+                if cur_frame_birth_count2 in birth_count_dict_det2:
+                    birth_count_dict_det2[cur_frame_birth_count2] += 1
+                else:
+                    birth_count_dict_det2[cur_frame_birth_count2] = 1
+
+        all_birth_probabilities_det1 = [0 for i in range(max_birth_count1 + 1)]
+        for birth_count, frequency in birth_count_dict_det1.iteritems():
+            all_birth_probabilities_det1[birth_count] = float(frequency)/float(total_frame_count)
+
+        all_birth_probabilities_det2 = [0 for i in range(max_birth_count2 + 1)]
+        for birth_count, frequency in birth_count_dict_det2.iteritems():
+            all_birth_probabilities_det2[birth_count] = float(frequency)/float(total_frame_count)
+
+
+        return (all_birth_probabilities_det1, all_birth_probabilities_det2)
+
+
+    def get_death_count(self, time_unassociated, near_border):
+        """
+        Input:
+        - time_unassociated: the number of time instances unassociated before target death
+        - near_border: boolean, does the ground truth obect have to be near the border time_unassociated time instances
+            after the current time (one time instance before death) or is
+            it required to not be near the border at this time?
+
+        Output:
+        - count: the total number of targets that die after being unassociated but alive for time_unassociated
+            time instances
+        """
+        count = 0
+        for seq_idx in range(len(self.gt_objects)):
+            for frame_idx in range(len(self.gt_objects[seq_idx]) - 1 - time_unassociated):
+                for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                    cur_gt_id = self.gt_objects[seq_idx][frame_idx][gt_idx].track_id
+                    alive_correctly = True
+                    near_border_correctly = (self.gt_objects[seq_idx][frame_idx][gt_idx].near_border == near_border)
+
+                    if self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection == None:
+                        initially_associated = False
+                    else:
+                        initially_associated = True
+                    associated_correctly = initially_associated
+                    for i in range(1, time_unassociated+1):
+                        alive = False
+                        associated = False
+                        for j in range(len(self.gt_objects[seq_idx][frame_idx+i])):
+                            if(cur_gt_id == self.gt_objects[seq_idx][frame_idx+i][j].track_id):
+                                alive = True
+                                if(self.gt_objects[seq_idx][frame_idx+i][j].associated_detection):
+                                    associated = True
+                                if(i == time_unassociated):
+                                    near_border_correctly = (self.gt_objects[seq_idx][frame_idx + time_unassociated][j].near_border == near_border)
+
+                        if(not alive):
+                            alive_correctly = False
+                        if(associated):
+                            associated_correctly = False
+
+                    died_correctly = True
+                    for j in range(len(self.gt_objects[seq_idx][frame_idx+1+time_unassociated])):
+                        if(cur_gt_id == self.gt_objects[seq_idx][frame_idx+1+time_unassociated][j].track_id):
+                            died_correctly = False #target still alive
+
+                    if(alive_correctly and associated_correctly and died_correctly and near_border_correctly and initially_associated):
+                        count += 1
+        return count
+
+
+    def get_gt_ids_by_frame(self):
+        """
+        Output:
+        all_gt_ids_by_frame: all_gt_ids_by_frame[i][j] is a list of all ground truth track ids that exist
+            in frame j of sequence i
+        all_assoc_gt_ids_by_frame: all_assoc_gt_ids_by_frame[i][j] is a list of ground truth track ids that exist
+            in frame j of sequence i and are associated with a detection
+        """
+        all_gt_ids_by_frame = []
+        all_assoc_gt_ids_by_frame = []
+        for seq_idx in range(len(self.gt_objects)):
+            all_gt_ids_by_frame.append([])
+            all_assoc_gt_ids_by_frame.append([])
+            for frame_idx in range(len(self.gt_objects[seq_idx])):
+                all_gt_ids_by_frame[seq_idx].append([])
+                all_assoc_gt_ids_by_frame[seq_idx].append([])
+                for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                    all_gt_ids_by_frame[seq_idx][frame_idx].append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+                    if self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection:
+                        all_assoc_gt_ids_by_frame[seq_idx][frame_idx].append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+
+        assert(len(all_gt_ids_by_frame) == len(gt_objects))
+        assert(len(all_assoc_gt_ids_by_frame) == len(gt_objects))
+        for seq_idx in range(len(self.gt_objects)):
+            assert(len(all_gt_ids_by_frame[seq_idx]) == len(gt_objects[seq_idx]))
+            assert(len(all_assoc_gt_ids_by_frame[seq_idx]) == len(gt_objects[seq_idx]))
+            for frame_idx in range(len(self.gt_objects[seq_idx]) - 1):
+                assert(len(all_gt_ids_by_frame[seq_idx][frame_idx]) == len(gt_objects[seq_idx][frame_idx]))
+
+        return (all_gt_ids_by_frame, all_assoc_gt_ids_by_frame)
+
+
+    def get_death_count1(self, time_unassociated, near_border):
+        """
+        Input:
+        - time_unassociated: the number of time instances unassociated before target death
+        - near_border: boolean, does the ground truth obect have to be near the border time_unassociated time instances
+            after the current time (one time instance before death) or is
+            it required to not be near the border at this time?
+
+        Output:
+        - count: the total number of targets that die after being unassociated but alive for time_unassociated
+            time instances
+        """
+        count = 0
+        never_associated_gt_count = 0
+
+        gt_track_ids = []
+        dead_target_ids = []
+        target_count_that_die_multiple_times = 0
+
+        (all_gt_ids_by_frame, all_assoc_gt_ids_by_frame) = self.get_gt_ids_by_frame()
+
+        total_death_count = 0
+        total_never_dead_count = 0
+
+        for seq_idx in range(len(self.gt_objects)):
+            for frame_idx in range(len(self.gt_objects[seq_idx])):
+                for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                    if (not (seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id) in gt_track_ids):
+                        gt_track_ids.append((seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id))
+            print "sequence ", seq_idx, " contains ", len(gt_objects[seq_idx][-1]),
+            print " objects alive in the last frame (index ",  len(gt_objects[seq_idx]) - 1, ") and ", len(gt_objects[seq_idx][-2]),
+            print " objects alive in the 2nd to last frame "
+            #debug
+
+            total_never_dead_count += len(gt_objects[seq_idx][-1])
+
+            #end debug
+
+            for frame_idx in range(len(self.gt_objects[seq_idx]) - 1):
+                for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                    cur_gt_id = self.gt_objects[seq_idx][frame_idx][gt_idx].track_id
+                    cur_gt_dies_next_step = not (cur_gt_id in all_gt_ids_by_frame[seq_idx][frame_idx + 1])
+                    if cur_gt_dies_next_step:
+                        if((seq_idx, cur_gt_id) in dead_target_ids):
+                            target_count_that_die_multiple_times += 1
+                        dead_target_ids.append((seq_idx, cur_gt_id))
+                        total_death_count += 1
+                        num_unassoc_steps = 0
+                        alive = True
+                        unassociated = True
+                        while alive and unassociated and (frame_idx - num_unassoc_steps >= 0) and num_unassoc_steps <= time_unassociated:
+                            alive = cur_gt_id in all_gt_ids_by_frame[seq_idx][frame_idx - num_unassoc_steps]
+                            associated = cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx - num_unassoc_steps]
+                            if associated:
+                                unassociated = False
+                            else:
+                                num_unassoc_steps += 1
+
+                            if (not alive):
+                                never_associated_gt_count += 1
+                        if num_unassoc_steps == time_unassociated \
+                            and self.gt_objects[seq_idx][frame_idx][gt_idx].near_border == near_border:
+                            count += 1
+        print "never associated gt count = ", never_associated_gt_count
+        print "total death count = ", total_death_count
+        print "total number of targets that never die (alive in last frame of a sequence): ", total_never_dead_count
+        print "total number of targets = ", len(gt_track_ids)
+        print "number of targets that die more than once = ", target_count_that_die_multiple_times
+        return count
+
+
+
+    def get_living_count1(self, time_unassociated, near_border):
+        """
+        Input:
+        - time_unassociated: the number of time instances unassociated before target death
+        - near_border: boolean, does the ground truth obect have to be near the border time_unassociated time instances
+            after the current time (one time instance before death) or is
+            it required to not be near the border at this time?
+
+        Output:
+        - count: the total number of targets that are alive and unassociated the time instance after being unassociated for time_unassociated
+            previous time instances (get_living_count(2) is the number of targets that are alive and unassociated after
+            3 time instances from their last association)
+        """
+        count = 0
+        total_gt_object_count = 0
+
+        (all_gt_ids_by_frame, all_assoc_gt_ids_by_frame) = self.get_gt_ids_by_frame()
+
+
+        for seq_idx in range(len(self.gt_objects)):
+            total_gt_object_count += len(self.gt_objects[seq_idx][-1])
+
+            for frame_idx in range(len(self.gt_objects[seq_idx]) - 1):
+                for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                    total_gt_object_count += 1
+                    cur_gt_id = self.gt_objects[seq_idx][frame_idx][gt_idx].track_id
+                    cur_gt_assoc = (cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx])
+                    cur_gt_unassoc_but_living_next_step = (cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx + 1]) and \
+                                                          (cur_gt_id in all_gt_ids_by_frame[seq_idx][frame_idx + 1])
+                    if cur_gt_assoc and cur_gt_unassoc_but_living_next_step:
+                        num_unassoc_steps = 0
+                        unassociated = True
+                        alive = True
+                        while unassociated and alive and (frame_idx + 2 + num_unassoc_steps < len(self.gt_objects[seq_idx])) and num_unassoc_steps <= time_unassociated:
+                            alive = cur_gt_id in all_gt_ids_by_frame[seq_idx][frame_idx + 2 + num_unassoc_steps]
+                            associated = cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx + 2 + num_unassoc_steps]
+                            if associated:
+                                unassociated = False
+                            elif alive:
+                                num_unassoc_steps += 1
+
+                        if num_unassoc_steps >= time_unassociated \
+                            and self.gt_objects[seq_idx][frame_idx][gt_idx].near_border == near_border:
+                            count += 1
+        print "total gt object count = ", total_gt_object_count
+        return count
+
+
+    def get_living_count(self, time_unassociated, near_border):
+        """
+        Input:
+        - time_unassociated: the number of unassociated time instances
+        - near_border: boolean, does the ground truth obect have to be near the border time_unassociated time instances
+            after the current time (one time instance before the final time it must be alive and unassociated) or is
+            it required to not be near the border at this time?
+
+        Output:
+        - count: the total number of targets that are alive and unassociated the time instance after being unassociated for time_unassociated
+            previous time instances (get_living_count(2) is the number of targets that are alive and unassociated after
+            3 time instances from their last association)
+        """
+        count = 0
+        for seq_idx in range(len(self.gt_objects)):
+            for frame_idx in range(len(self.gt_objects[seq_idx]) - 1 - time_unassociated):
+                for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+
+                    cur_gt_id = self.gt_objects[seq_idx][frame_idx][gt_idx].track_id
+                    alive_correctly = True
+                    near_border_correctly = (self.gt_objects[seq_idx][frame_idx][gt_idx].near_border == near_border)
+                    if self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection == None:
+                        initially_associated = False
+                    else:
+                        initially_associated = True
+                    associated_correctly = initially_associated
+                    for i in range(1, time_unassociated + 2):
+                        alive = False
+                        associated = False
+                        for j in range(len(self.gt_objects[seq_idx][frame_idx+i])):
+                            if(cur_gt_id == self.gt_objects[seq_idx][frame_idx+i][j].track_id):
+                                alive = True
+                                if(self.gt_objects[seq_idx][frame_idx+i][j].associated_detection):
+                                    associated = True
+                                if(i == time_unassociated):
+                                    near_border_correctly = (self.gt_objects[seq_idx][frame_idx + time_unassociated][j].near_border == near_border)
+
+                        if(not alive):
+                            alive_correctly = False
+                        if(associated):
+                            associated_correctly = False
+                    if(alive_correctly and associated_correctly and near_border_correctly and initially_associated):
+                        count += 1
+        return count
+
+    def get_death_probs(self, near_border):
+        """
+        Input:
+        - near_border: boolean, death probabilities for ground truth obects near the border on
+            their last time instance alive or not near the border?
+        """
+        death_probs = []
+        death_counts = []
+        living_counts = []
+        for i in range(5):
+            death_count = float(self.get_death_count1(i, near_border))
+            living_count = float(self.get_living_count1(i, near_border))
+            death_counts.append(death_count)
+            living_counts.append(living_count)
+            if death_count + living_count == 0:
+                death_probs.append(0)
+            else:
+                death_probs.append(death_count/(death_count + living_count))
+        return (death_probs, death_counts, living_counts)
 
 class AllData:
     def __init__(self, gt_objects, det_objects):
@@ -1503,10 +1910,33 @@ if __name__ == "__main__":
 
     mail = mailpy.Mail("")
 
-#    score_intervals = [i/2.0 for i in range(0, 10)]
-#    score_intervals = [i for i in range(0, 20)]
-    score_intervals = [2]
-    get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True)
+    score_intervals_lsvm = [i/2.0 for i in range(0, 10)]
+    score_intervals_regionlets = [i for i in range(2, 20)]
+#    score_intervals_lsvm = [0.0]
+#    score_intervals_regionlets = [2.0]
+#    score_intervals = [2.0]
+#    get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True)
+
+    #### Check death probabilities #######
+    (gt_objects, lsvm_det_objects) = evaluate(min_score=0.0, det_method='lsvm', mail=mail, obj_class="car")
+    (gt_objects, regionlets_det_objects) = evaluate(min_score=2.0, det_method='regionlets', mail=mail, obj_class="car")
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+#    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects)
+#    multi_detections = MultiDetections(gt_objects, lsvm_det_objects, lsvm_det_objects)
+    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+    print "death probabilities near border:", death_probs_near_border
+    print "death counts near border:", death_counts_near_border
+    print "living counts near border:", living_counts_near_border
+    print "death probabilities not near border:", death_probs_not_near_border
+    print "death counts not near border:", death_counts_not_near_border
+    print "living counts not near border:", living_counts_not_near_border
+
+    (all_birth_probabilities_regionlets, all_birth_probabilities_lsvm) = apply_function_on_intervals_2_det(score_intervals_regionlets, score_intervals_lsvm, multi_detections.get_birth_probabilities_score_range)
+
+    print "regionlets birth probabilities: ", all_birth_probabilities_regionlets
+    print "lsvm birth probabilities: ", all_birth_probabilities_lsvm
+
 ##########    #obj_class == "car" or obj_class == "pedestrian"
 ##########    (gt_objects, det_objects) = evaluate(score_intervals[0], det_method,mail, obj_class="car")
 ##########    all_data = AllData(gt_objects, det_objects)

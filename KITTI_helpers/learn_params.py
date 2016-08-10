@@ -18,7 +18,7 @@ from learn_Q import Target
 from learn_Q import default_time_step
 import pickle
 
-MIN_SCORE = 0.0 #only consider detections with a score above this value
+MIN_SCORE = 2.0 #only consider detections with a score above this value
 
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True

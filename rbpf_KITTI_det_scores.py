@@ -36,10 +36,11 @@ import time
 
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
+#SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
-N_PARTICLES = 5000 #number of particles used in the particle filter
+N_PARTICLES = 10000 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
@@ -51,13 +52,13 @@ USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially
 default_time_step = .1 
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-USE_CONSTANT_R = True
+USE_CONSTANT_R = False
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
 
-#SCORE_INTERVALS = [i for i in range(2, 20)]
-SCORE_INTERVALS = [2*i for i in range(1, 10)]
+SCORE_INTERVALS = [i for i in range(2, 20)]
+#SCORE_INTERVALS = [2*i for i in range(1, 10)]
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
 (measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
 	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
@@ -102,6 +103,11 @@ P_TARGET_EMISSION = 0.813358070501
 BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
 NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
 
+#BORDER_DEATH_PROBABILITIES = [-99, 0.8, 0.5, 0.3, 0.4, 0.8]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.07, 0.025, 0.03, 0.03, 0.006]
+
+#BORDER_DEATH_PROBABILITIES = [-99, 0.9430523917995444, 0.6785714285714286, 0.4444444444444444, 0.5, 1.0]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.08235294117647059, 0.02284263959390863, 0.04150943396226415, 0.041237113402061855, 0.00684931506849315]
 #from learn_params
 #CLUTTER_COUNT_PRIOR = [0.7860256569933989, 0.17523975588491716 - .001, 0.031635321957902605, 0.004857391954166148, 0.0016191306513887158, 0.0003736455349358575, 0.00024909702329057166, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
 #from learn_params1, not counting 'ignored' ground truth
@@ -353,7 +359,7 @@ class Target:
 					cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[-1]
 #					cur_death_prob = 1.0
 
-		assert(cur_death_prob >= 0.0 and cur_death_prob <= 1.0)
+		assert(cur_death_prob >= 0.0 and cur_death_prob <= 1.0), cur_death_prob
 		return cur_death_prob
 
 class Measurement:
@@ -396,7 +402,13 @@ class TargetSet:
 		Kill target self.living_targets[living_target_index], note that living_target_index
 		may not be the target's id_ (or index in all_targets)
 		"""
+
+		#kf predict was run for this time instance, but the target actually died, so remove the predicted state
+		del self.living_targets[living_target_index].all_states[-1]
+		del self.living_targets[living_target_index].all_time_stamps[-1]
+
 		del self.living_targets[living_target_index]
+
 		self.living_count -= 1
 		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
 
@@ -1350,7 +1362,9 @@ print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
 print "RBPF runtime = ", t1-t0
 eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 print "USE_CONSTANT_R = ", USE_CONSTANT_R
-
+print "number of particles = ", N_PARTICLES
+print "score intervals: ", SCORE_INTERVALS
+print "run on sequences: ", SEQUENCES_TO_PROCESS
 #test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
 #test_target_set.write_targets_to_KITTI_format(num_frames = 154, filename = 'test_read_write_0000_results.txt')
 
