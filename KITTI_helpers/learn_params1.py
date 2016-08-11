@@ -5,6 +5,7 @@
 # encoding: utf-8
 import numpy as np
 import sys,os,copy,math
+import os.path
 from munkres import Munkres
 from collections import defaultdict
 try:
@@ -20,6 +21,11 @@ import pickle
 
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
+
+#load ground truth data and detection data, when available, from saved pickle file
+#to cut down on load time
+USE_PICKLED_DATA = True 
+PICKELD_DATA_DIRECTORY = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/learn_params1_pickled_data"
 
 CAMERA_PIXEL_WIDTH = 1242
 CAMERA_PIXEL_HEIGHT = 375
@@ -972,6 +978,21 @@ def evaluate(min_score, det_method,mail,obj_class = "car"):
 
     """
     # start evaluation and instanciated eval object
+
+    if USE_PICKLED_DATA:
+        if not os.path.exists(PICKELD_DATA_DIRECTORY):
+            os.makedirs(PICKELD_DATA_DIRECTORY)
+
+        data_filename = PICKELD_DATA_DIRECTORY + "/min_score_%f_det_method_%s_obj_class_%s.pickle" % \
+                                                 (min_score, det_method, obj_class)
+
+        if os.path.isfile(data_filename): 
+            f = open(data_filename, 'r')
+            (gt_objects, det_objects) = pickle.load(f)
+            f.close()
+            return (gt_objects, det_objects)
+
+
     mail.msg("Processing Result for KITTI Tracking Benchmark")
     classes = []
     assert(obj_class == "car" or obj_class == "pedestrian")
@@ -1002,6 +1023,11 @@ def evaluate(min_score, det_method,mail,obj_class = "car"):
 #            mail.msg("There seem to be no true positives or false positives at all in the submitted data.")
 
     (gt_objects, det_objects) = e.compute3rdPartyMetrics()
+
+    if USE_PICKLED_DATA:
+        f = open(data_filename, 'w')
+        pickle.dump((gt_objects, det_objects), f)
+        f.close()  
 
     # finish
     if len(classes)==0:
@@ -1809,15 +1835,15 @@ class Measurement:
 
 def doctor_clutter_probabilities(all_clutter_probabilities):
     for i in range(len(all_clutter_probabilities)):
-        all_clutter_probabilities[i][0] -= .0001
+        all_clutter_probabilities[i][0] -= .0000001
         # += used to append a list to a list!!
-        all_clutter_probabilities[i] += [.0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20, .0001/20]
+        all_clutter_probabilities[i] += [.0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20]
 
 def get_meas_target_set(score_intervals, det_method = "lsvm", obj_class = "car", doctor_clutter_probs = True):
     """
     Input:
-    - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0001/20
-        and subtract .0001 from element 0
+    - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
+        and subtract .0000001 from element 0
     """
     mail = mailpy.Mail("")
 
@@ -1890,6 +1916,57 @@ def get_meas_target_set(score_intervals, det_method = "lsvm", obj_class = "car",
 
 
 
+
+def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_score_intervals, \
+    obj_class = "car", doctor_clutter_probs = True):
+    """
+    Input:
+    - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
+        and subtract .0000001 from element 0
+    """
+    print "HELLO#1"
+    (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
+        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
+        "regionlets", obj_class, doctor_clutter_probs)
+    print "HELLO#2"
+
+    (measurementTargetSetsBySequence_lsvm, target_emission_probs_lsvm, clutter_probabilities_lsvm, \
+        incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(lsvm_score_intervals, \
+        "lsvm", obj_class, doctor_clutter_probs)
+    print "HELLO#3"
+
+
+
+    returnTargSets = []
+    assert(len(measurementTargetSetsBySequence_lsvm) == len(measurementTargetSetsBySequence_regionlets))
+    for seq_idx in range(len(measurementTargetSetsBySequence_lsvm)):
+        returnTargSets.append([measurementTargetSetsBySequence_regionlets[seq_idx],\
+                               measurementTargetSetsBySequence_lsvm[seq_idx]])
+    print "HELLO#4"
+
+    emission_probs = [target_emission_probs_regionlets, target_emission_probs_lsvm]
+    clutter_probs = [clutter_probabilities_regionlets, clutter_probabilities_lsvm]
+    meas_noise_covs = [meas_noise_covs_regionlets, meas_noise_covs_lsvm]
+    print "HELLO#5"
+
+    mail = mailpy.Mail("") #this is silly and could be cleaned up
+    (gt_objects, regionlets_det_objects) = evaluate(min_score=regionlets_score_intervals[0], \
+        det_method='regionlets', mail=mail, obj_class=obj_class)
+    print "HELLO#6"
+
+    (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
+        det_method='lsvm', mail=mail, obj_class=obj_class)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+    print "HELLO#7"
+
+    (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
+        lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
+
+    birth_probabilities = [birth_probabilities_regionlets, birth_probabilities_lsvm]
+    print "HELLO#8"
+
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs)
+
 #########################################################################
 # entry point of evaluation script
 # input:
@@ -1932,7 +2009,8 @@ if __name__ == "__main__":
     print "death counts not near border:", death_counts_not_near_border
     print "living counts not near border:", living_counts_not_near_border
 
-    (all_birth_probabilities_regionlets, all_birth_probabilities_lsvm) = apply_function_on_intervals_2_det(score_intervals_regionlets, score_intervals_lsvm, multi_detections.get_birth_probabilities_score_range)
+    (all_birth_probabilities_regionlets, all_birth_probabilities_lsvm) = apply_function_on_intervals_2_det(score_intervals_regionlets, \
+        score_intervals_lsvm, multi_detections.get_birth_probabilities_score_range)
 
     print "regionlets birth probabilities: ", all_birth_probabilities_regionlets
     print "lsvm birth probabilities: ", all_birth_probabilities_lsvm
