@@ -40,7 +40,7 @@ SEQUENCES_TO_PROCESS = [0]
 #eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
-N_PARTICLES = 2000 #number of particles used in the particle filter
+N_PARTICLES = 100 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
