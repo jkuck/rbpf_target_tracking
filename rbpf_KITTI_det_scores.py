@@ -31,7 +31,7 @@ from proposal2_helper import sample_target_deaths_proposal2
 import cProfile
 import time
 
-USE_CREATE_CHILD = True #speed up copying during resampling
+USE_CREATE_CHILD = False #speed up copying during resampling
 
 #MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
 #MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
