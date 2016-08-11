@@ -40,7 +40,7 @@ SEQUENCES_TO_PROCESS = [0]
 #eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
-N_PARTICLES = 10000 #number of particles used in the particle filter
+N_PARTICLES = 100 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
@@ -388,6 +388,13 @@ class TargetSet:
 		self.total_count = 0 #number of living targets plus number of dead targets
 		self.measurements = [] #generated measurements for a generative TargetSet 
 
+	def create_child(self):
+		child_target_set = TargetSet()
+		child_target_set.total_count = self.living_count
+		child_target_set.living_count = self.living_count
+		child_target_set.all_targets = copy.deepcopy(self.living_targets)
+		child_target_set.living_targets = copy.deepcopy(self.living_targets)
+
 	def create_new_target(self, measurement, width, height, cur_time):
 		new_target = Target(cur_time, self.total_count, np.squeeze(measurement), width, height)
 		self.living_targets.append(new_target)
@@ -474,6 +481,8 @@ class Particle:
 
 		self.id_ = id_
 
+		self.parent_id = -1
+
 		#for debugging
 		self.c_debug = -1
 		self.imprt_re_weight_debug = -1
@@ -481,9 +490,12 @@ class Particle:
 		self.pi_clutter_debug = -1
 		self.pi_targets_debug = []
 
-	def child_copy(self, id_):
+	def create_child(self, id_):
 		child_particle = Particle(id_)
 		child_particle.importance_weight = self.importance_weight
+		child_particle.parent_id = self.id_
+		child_particle.targets = self.targets.create_child()
+		return child_particle
 
 	def create_new_target(self, measurement, width, height, cur_time):
 		self.targets.create_new_target(measurement, width, height, cur_time)
