@@ -31,7 +31,7 @@ SKIP_LEARNING_Q = True
 #load ground truth data and detection data, when available, from saved pickle file
 #to cut down on load time
 USE_PICKLED_DATA = True
-PICKELD_DATA_DIRECTORY = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/learn_params1_pickled_data"
+PICKELD_DATA_DIRECTORY = "./KITTI_helpers/learn_params1_pickled_data"
 
 CAMERA_PIXEL_WIDTH = 1242
 CAMERA_PIXEL_HEIGHT = 375
@@ -164,7 +164,7 @@ class trackingEvaluation(object):
              missed         - number of missed targets (FN)
     """
 
-    def __init__(self, cutoff_score, det_method, gt_path="/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/training_ground_truth", min_overlap=0.5, max_truncation = 0.15, mail=None, cls="car"):
+    def __init__(self, cutoff_score, det_method, gt_path="./KITTI_helpers/data/training_ground_truth", min_overlap=0.5, max_truncation = 0.15, mail=None, cls="car"):
         #jdk parameters to learn
         self.cutoff_score = cutoff_score
         self.clutter_count_list = []
@@ -212,7 +212,7 @@ class trackingEvaluation(object):
         # get number of sequences and
         # get number of frames per sequence from test mapping
         # (created while extracting the benchmark)
-        filename_test_mapping = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/evaluate_tracking.seqmap"
+        filename_test_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
         self.n_frames         = []
         self.sequence_name    = []
         with open(filename_test_mapping, "r") as fh:
@@ -233,7 +233,7 @@ class trackingEvaluation(object):
         self.gt_path           = os.path.join(gt_path, "label_02")
 
         self.det_method = det_method
-        self.t_path            = os.path.join("/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/object_detections", self.det_method, "training/det_02")
+        self.t_path            = os.path.join("./KITTI_helpers/data/object_detections", self.det_method, "training/det_02")
         self.n_gt              = 0
         self.n_gt_trajectories = 0
         self.n_gt_seq          = []

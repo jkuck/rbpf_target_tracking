@@ -31,17 +31,17 @@ from proposal2_helper import sample_target_deaths_proposal2
 
 import cProfile
 import time
-
-#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
-#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
+import os
 
 #run on these sequences
+N_PARTICLES = 1 #number of particles used in the particle filter
 SEQUENCES_TO_PROCESS = [0]
+NUMBER_OF_RUNS = 10
+DESCRIPTION_OF_RUN = 'lsvm_and_regionlets_%d_particles' % N_PARTICLES
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
-#eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
+#eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
-N_PARTICLES = 100 #number of particles used in the particle filter
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
@@ -1352,7 +1352,8 @@ def run_rbpf_on_targetset(target_sets):
 		if(particle.importance_weight == max_imprt_weight):
 			max_weight_target_set = particle.targets
 
-	return max_weight_target_set
+	run_info = [number_resamplings]
+	return (max_weight_target_set, run_info)
 
 
 def test_read_write_data_KITTI(target_set):
@@ -1439,21 +1440,10 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	estimated_ts.plot_all_target_locations("Estimated Tracks")      
 	plt.show()
 
-#f = open(MEASURMENT_FILENAME, 'r')
-#measurementTargetSetsBySequence = pickle.load(f)
-#f.close()
-#print '-'*80
-#print measurementTargetSetsBySequence[0].measurements[0].time
-#print measurementTargetSetsBySequence[0].measurements[1].time
-#print measurementTargetSetsBySequence[0].measurements[2].time
-#print measurementTargetSetsBySequence[0].measurements[3].time
-#estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[0])
-#estimated_ts.write_targets_to_KITTI_format(num_frames = 154, filename = 'rbpf_training_0000_results.txt')
-
-#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[0])')
 
 
-filename_mapping = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/evaluate_tracking.seqmap"
+
+filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
 n_frames         = []
 sequence_name    = []
 with open(filename_mapping, "r") as fh:
@@ -1466,30 +1456,59 @@ print n_frames
 print sequence_name     
 assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 #for seq_idx in range(len(measurementTargetSetsBySequence)):
+results_folder = './rbpf_KITTI_results/%s' % DESCRIPTION_OF_RUN
 t0 = time.time()
-for seq_idx in SEQUENCES_TO_PROCESS:
-	print "Processing sequence: ", seq_idx
-	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-#	estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
-	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
-											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
+info_by_run = [] #list of info from each run
+for run_idx in range(NUMBER_OF_RUNS):
+	cur_run_info = None
+	for seq_idx in SEQUENCES_TO_PROCESS:
+		print "Processing sequence: ", seq_idx
+		tA = time.time()
+		(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+		tB = time.time()
+		this_seq_run_time = tB - tA
+		cur_seq_info.append(this_seq_run_time)
+		if cur_run_info == None:
+			cur_run_info = cur_seq_info
+		else:
+			assert(len(cur_run_info) == len(cur_seq_info))
+			for info_idx in len(cur_run_info):
+				#assuming for now info can be summed over each sequence in a run!
+				#works for runtime and number of times resampling is performed
+				cur_run_info[info_idx] += cur_seq_info[info_idx]
+
+		filename = '%s/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+		if not os.path.exists(os.path.dirname(filename)):
+			try:
+				os.makedirs(os.path.dirname(filename))
+			except OSError as exc: # Guard against race condition
+				if exc.errno != errno.EEXIST:
+					raise
+		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+	info_by_run.append(cur_run_info)
+
 t1 = time.time()
 
+
+eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+stdout = sys.stdout
+sys.stdout = open(eval_metrics_file, 'w')
+
+eval_results(results_folder, SEQUENCES_TO_PROCESS, info_by_run)
 print "Cached likelihoods = ", CACHED_LIKELIHOODS
 print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
-print "RBPF runtime = ", t1-t0
-eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
+print "RBPF runtime (sum of all runs) = ", t1-t0
 print "USE_CONSTANT_R = ", USE_CONSTANT_R
 print "number of particles = ", N_PARTICLES
 print "score intervals: ", SCORE_INTERVALS
 print "run on sequences: ", SEQUENCES_TO_PROCESS
-#test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
-#test_target_set.write_targets_to_KITTI_format(num_frames = 154, filename = 'test_read_write_0000_results.txt')
+print "number of particles = ", N_PARTICLES
 
-#estimated_ts = cProfile.run('run_rbpf_on_targetset(ground_truth_ts)')
+sys.stdout.close()
+sys.stdout = stdout
 
-#calc_tracking_performance(ground_truth_ts, estimated_ts)
-
+print "Printing works normally again!"
 
 
 
