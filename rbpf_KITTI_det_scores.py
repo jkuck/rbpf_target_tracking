@@ -21,7 +21,7 @@ sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
-#from jdk_helper_evaluate_results import eval_results
+from jdk_helper_evaluate_results import eval_results
 
 #from multiple_meas_per_time_assoc_priors import HiddenState
 #from proposal2_helper import possible_measurement_target_associations
