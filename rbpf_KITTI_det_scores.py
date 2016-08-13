@@ -15,19 +15,19 @@ import math
 from numpy.linalg import inv
 import pickle
 import sys
-sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
-import clearmetrics
+#sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
+#import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
-from jdk_helper_evaluate_results import eval_results
+#from jdk_helper_evaluate_results import eval_results
 
-from multiple_meas_per_time_assoc_priors import HiddenState
-from proposal2_helper import possible_measurement_target_associations
-from proposal2_helper import memoized_birth_clutter_prior
-from proposal2_helper import sample_birth_clutter_counts
-from proposal2_helper import sample_target_deaths_proposal2
+#from multiple_meas_per_time_assoc_priors import HiddenState
+#from proposal2_helper import possible_measurement_target_associations
+#from proposal2_helper import memoized_birth_clutter_prior
+#from proposal2_helper import sample_birth_clutter_counts
+#from proposal2_helper import sample_target_deaths_proposal2
 
 import cProfile
 import time
