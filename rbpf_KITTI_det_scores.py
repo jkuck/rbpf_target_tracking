@@ -34,10 +34,11 @@ import time
 import os
 
 #run on these sequences
-N_PARTICLES = 1 #number of particles used in the particle filter
 SEQUENCES_TO_PROCESS = [0]
 NUMBER_OF_RUNS = 10
-DESCRIPTION_OF_RUN = 'lsvm_and_regionlets_%d_particles' % N_PARTICLES
+#N_PARTICLES = 1 #number of particles used in the particle filter
+DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
+
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
@@ -1441,74 +1442,84 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	plt.show()
 
 
+if __name__ == "__main__":
+
+	# check for correct number of arguments. if user_sha and email are not supplied,
+	# no notification email is sent (this option is used for auto-updates)
+	if len(sys.argv)!=2:
+		print "Supply the number of particles as a command"
+
+	N_PARTICLES = int(sys.argv[1])
+
+	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
 
 
-filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
-n_frames         = []
-sequence_name    = []
-with open(filename_mapping, "r") as fh:
-    for i,l in enumerate(fh):
-        fields = l.split(" ")
-        sequence_name.append("%04d" % int(fields[0]))
-        n_frames.append(int(fields[3]) - int(fields[2]))
-fh.close() 
-print n_frames
-print sequence_name     
-assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-#for seq_idx in range(len(measurementTargetSetsBySequence)):
-results_folder = './rbpf_KITTI_results/%s' % DESCRIPTION_OF_RUN
-t0 = time.time()
-info_by_run = [] #list of info from each run
-for run_idx in range(NUMBER_OF_RUNS):
-	cur_run_info = None
-	for seq_idx in SEQUENCES_TO_PROCESS:
-		print "Processing sequence: ", seq_idx
-		tA = time.time()
-		(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
-		tB = time.time()
-		this_seq_run_time = tB - tA
-		cur_seq_info.append(this_seq_run_time)
-		if cur_run_info == None:
-			cur_run_info = cur_seq_info
-		else:
-			assert(len(cur_run_info) == len(cur_seq_info))
-			for info_idx in len(cur_run_info):
-				#assuming for now info can be summed over each sequence in a run!
-				#works for runtime and number of times resampling is performed
-				cur_run_info[info_idx] += cur_seq_info[info_idx]
+	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
+	n_frames         = []
+	sequence_name    = []
+	with open(filename_mapping, "r") as fh:
+	    for i,l in enumerate(fh):
+	        fields = l.split(" ")
+	        sequence_name.append("%04d" % int(fields[0]))
+	        n_frames.append(int(fields[3]) - int(fields[2]))
+	fh.close() 
+	print n_frames
+	print sequence_name     
+	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
+	#for seq_idx in range(len(measurementTargetSetsBySequence)):
+	results_folder = './rbpf_KITTI_results/%s' % results_folder_name
+	t0 = time.time()
+	info_by_run = [] #list of info from each run
+	for run_idx in range(NUMBER_OF_RUNS):
+		cur_run_info = None
+		for seq_idx in SEQUENCES_TO_PROCESS:
+			print "Processing sequence: ", seq_idx
+			tA = time.time()
+			(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+			tB = time.time()
+			this_seq_run_time = tB - tA
+			cur_seq_info.append(this_seq_run_time)
+			if cur_run_info == None:
+				cur_run_info = cur_seq_info
+			else:
+				assert(len(cur_run_info) == len(cur_seq_info))
+				for info_idx in len(cur_run_info):
+					#assuming for now info can be summed over each sequence in a run!
+					#works for runtime and number of times resampling is performed
+					cur_run_info[info_idx] += cur_seq_info[info_idx]
 
-		filename = '%s/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
-		if not os.path.exists(os.path.dirname(filename)):
-			try:
-				os.makedirs(os.path.dirname(filename))
-			except OSError as exc: # Guard against race condition
-				if exc.errno != errno.EEXIST:
-					raise
-		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
-	info_by_run.append(cur_run_info)
+			filename = '%s/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+			if not os.path.exists(os.path.dirname(filename)):
+				try:
+					os.makedirs(os.path.dirname(filename))
+				except OSError as exc: # Guard against race condition
+					if exc.errno != errno.EEXIST:
+						raise
+			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+		info_by_run.append(cur_run_info)
 
-t1 = time.time()
+	t1 = time.time()
 
 
-eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
-stdout = sys.stdout
-sys.stdout = open(eval_metrics_file, 'w')
+	eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+	stdout = sys.stdout
+	sys.stdout = open(eval_metrics_file, 'w')
 
-eval_results(results_folder, SEQUENCES_TO_PROCESS, info_by_run)
-print "Cached likelihoods = ", CACHED_LIKELIHOODS
-print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
-print "RBPF runtime (sum of all runs) = ", t1-t0
-print "USE_CONSTANT_R = ", USE_CONSTANT_R
-print "number of particles = ", N_PARTICLES
-print "score intervals: ", SCORE_INTERVALS
-print "run on sequences: ", SEQUENCES_TO_PROCESS
-print "number of particles = ", N_PARTICLES
+	eval_results(results_folder, SEQUENCES_TO_PROCESS, info_by_run)
+	print "Cached likelihoods = ", CACHED_LIKELIHOODS
+	print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+	print "RBPF runtime (sum of all runs) = ", t1-t0
+	print "USE_CONSTANT_R = ", USE_CONSTANT_R
+	print "number of particles = ", N_PARTICLES
+	print "score intervals: ", SCORE_INTERVALS
+	print "run on sequences: ", SEQUENCES_TO_PROCESS
+	print "number of particles = ", N_PARTICLES
 
-sys.stdout.close()
-sys.stdout = stdout
+	sys.stdout.close()
+	sys.stdout = stdout
 
-print "Printing works normally again!"
+	print "Printing works normally again!"
 
 
 
