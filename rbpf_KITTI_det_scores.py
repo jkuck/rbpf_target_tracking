@@ -35,9 +35,11 @@ import os
 
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
-NUMBER_OF_RUNS = 10
+NUMBER_OF_RUNS = 100
+RUNS_COMPLETED_ALREADY = 56
 #N_PARTICLES = 1 #number of particles used in the particle filter
-DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
+DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
+#DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
@@ -1470,7 +1472,8 @@ if __name__ == "__main__":
 	results_folder = './rbpf_KITTI_results/%s' % results_folder_name
 	t0 = time.time()
 	info_by_run = [] #list of info from each run
-	for run_idx in range(NUMBER_OF_RUNS):
+#	for run_idx in range(NUMBER_OF_RUNS):
+	for run_idx in range(RUNS_COMPLETED_ALREADY, NUMBER_OF_RUNS):
 		cur_run_info = None
 		for seq_idx in SEQUENCES_TO_PROCESS:
 			print "Processing sequence: ", seq_idx
