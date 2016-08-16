@@ -67,7 +67,8 @@ REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
 #LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
 #REGIONLETS_SCORE_INTERVALS = [2]
 #LSVM_SCORE_INTERVALS = [0]
-SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+#SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
 
 #(measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
 #	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
