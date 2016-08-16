@@ -1536,6 +1536,7 @@ if __name__ == "__main__":
 	else:
 		eval_results(results_folder, SEQUENCES_TO_PROCESS)
 
+	print "Description of run: ", DESCRIPTION_OF_RUN
 	print "Cached likelihoods = ", CACHED_LIKELIHOODS
 	print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
 	print "RBPF runtime (sum of all runs) = ", t1-t0

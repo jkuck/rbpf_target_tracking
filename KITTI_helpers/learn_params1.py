@@ -19,12 +19,6 @@ from learn_Q import Target
 from learn_Q import default_time_step
 import pickle
 
-#Should ignored truth objects be included when calculating probabilities? (double check specifics)
-INCLUDE_IGNORED_GT = False
-INCLUDE_DONTCARE_IN_GT = False
-
-INCLUDE_IGNORED_DETECTIONS = True #False doesn't really make sense, but debugging
-
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
 
@@ -432,7 +426,7 @@ class trackingEvaluation(object):
                     all_gt = seq_gt[f]
                     g,dc = [],[]
                     for gg in all_gt:
-                        if INCLUDE_DONTCARE_IN_GT:
+                        if include_dontcare_in_gt:
                             g.append(gg)
                         else:
                             if gg.obj_type=="dontcare":
@@ -476,7 +470,7 @@ class trackingEvaluation(object):
             raise TypeError("Unkown type for criterion")
         return o
 
-    def compute3rdPartyMetrics(self):
+    def compute3rdPartyMetrics(self, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections):
         """
             Computes the metrics defined in 
                 - Stiefelhagen 2008: Evaluating Multiple Object Tracking Performance: The CLEAR MOT Metrics
@@ -668,7 +662,7 @@ class trackingEvaluation(object):
 
                 #jdk
 
-                if INCLUDE_IGNORED_GT and not INCLUDE_IGNORED_DETECTIONS:
+                if include_ignored_gt and not include_ignored_detections:
                     for gg in g:
                         gt_objects[-1][-1].append(gtObject(gg.x1, gg.x2, gg.y1, gg.y2, gg.track_id))
 
@@ -684,7 +678,7 @@ class trackingEvaluation(object):
                         if(not det_obj_idx in associated_detections and not t[det_obj_idx].ignored):
                             det_objects[-1][-1].append(detObject(t[det_obj_idx].x1, t[det_obj_idx].x2, t[det_obj_idx].y1, t[det_obj_idx].y2, assoc=-1, score=t[det_obj_idx].score))
 
-                elif not INCLUDE_IGNORED_GT and not INCLUDE_IGNORED_DETECTIONS:
+                elif not include_ignored_gt and not include_ignored_detections:
                     for gg in g:
                         if(not gg.ignored):
                             gt_objects[-1][-1].append(gtObject(gg.x1, gg.x2, gg.y1, gg.y2, gg.track_id))
@@ -703,7 +697,7 @@ class trackingEvaluation(object):
 
 
 
-                elif INCLUDE_IGNORED_GT and INCLUDE_IGNORED_DETECTIONS:
+                elif include_ignored_gt and include_ignored_detections:
                     for gg in g:
                         gt_objects[-1][-1].append(gtObject(gg.x1, gg.x2, gg.y1, gg.y2, gg.track_id))
 
@@ -719,7 +713,7 @@ class trackingEvaluation(object):
                         if(not det_obj_idx in associated_detections):
                             det_objects[-1][-1].append(detObject(t[det_obj_idx].x1, t[det_obj_idx].x2, t[det_obj_idx].y1, t[det_obj_idx].y2, assoc=-1, score=t[det_obj_idx].score))
 
-                elif not INCLUDE_IGNORED_GT and INCLUDE_IGNORED_DETECTIONS:
+                elif not include_ignored_gt and include_ignored_detections:
                     for gg in g:
                         if(not gg.ignored):
                             gt_objects[-1][-1].append(gtObject(gg.x1, gg.x2, gg.y1, gg.y2, gg.track_id))
@@ -1035,11 +1029,20 @@ class trackingEvaluation(object):
         self.printSep()
         dump.close()
 
-def evaluate(min_score, det_method,mail,obj_class = "car"):
+def evaluate(min_score, det_method,mail,obj_class = "car", include_ignored_gt = False, include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Output:
     - gt_objects: gt_objects[i][j] is a list of all ground truth objects in the jth frame of the ith video sequence
     - det_objects: det_objects[i][j] is a list of all detected objects in the jth frame of the ith video sequence
+    - include_ignored_gt: Boolean, should ignored ground truth objects be included when calculating probabilities? 
+    - include_dontcare_in_gt: Boolean, should don't care ground truth objects be included when calculating probabilities? 
+    - include_ignored_detections = Boolean, should ignored detections be included when calculating probabilities?
+        False doesn't really make sense because when actually running without ground truth information we don't know
+        whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+        a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+        can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+        If this occured, it would make sense to try excluding these detections.)
+
 
     """
     # start evaluation and instanciated eval object
@@ -1049,7 +1052,7 @@ def evaluate(min_score, det_method,mail,obj_class = "car"):
             os.makedirs(PICKELD_DATA_DIRECTORY)
 
         data_filename = PICKELD_DATA_DIRECTORY + "/min_score_%f_det_method_%s_obj_class_%s_include_ignored_gt_%s_include_dontcare_gt_%s_include_ignored_det_%s.pickle" % \
-                                                 (min_score, det_method, obj_class, INCLUDE_IGNORED_GT, INCLUDE_DONTCARE_IN_GT, INCLUDE_IGNORED_DETECTIONS)
+                                                 (min_score, det_method, obj_class, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
 
         if os.path.isfile(data_filename): 
             f = open(data_filename, 'r')
@@ -1087,7 +1090,7 @@ def evaluate(min_score, det_method,mail,obj_class = "car"):
 #        else:
 #            mail.msg("There seem to be no true positives or false positives at all in the submitted data.")
 
-    (gt_objects, det_objects) = e.compute3rdPartyMetrics()
+    (gt_objects, det_objects) = e.compute3rdPartyMetrics(include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
 
     if USE_PICKLED_DATA:
         f = open(data_filename, 'w')
@@ -1950,7 +1953,8 @@ def doctor_clutter_probabilities(all_clutter_probabilities):
         # += used to append a list to a list!!
         all_clutter_probabilities[i] += [.0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20]
 
-def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doctor_clutter_probs=True, print_info=False):
+def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doctor_clutter_probs=True, print_info=False,\
+    include_ignored_gt = False, include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
@@ -1958,7 +1962,8 @@ def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doc
     """
     mail = mailpy.Mail("")
 
-    (gt_objects, det_objects) = evaluate(score_intervals[0], det_method,mail, obj_class="car")
+    (gt_objects, det_objects) = evaluate(score_intervals[0], det_method,mail, obj_class="car", include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
 
     measurementTargetSetsBySequence = []
 
@@ -2029,7 +2034,8 @@ def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doc
 
 
 def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_score_intervals, \
-    obj_class = "car", doctor_clutter_probs = True):
+    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = False, \
+    include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
@@ -2038,12 +2044,12 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs)
+        "regionlets", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
     print "HELLO#2"
 
     (measurementTargetSetsBySequence_lsvm, target_emission_probs_lsvm, clutter_probabilities_lsvm, \
         incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(lsvm_score_intervals, \
-        "lsvm", obj_class, doctor_clutter_probs)
+        "lsvm", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
     print "HELLO#3"
 
 
@@ -2062,11 +2068,13 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
 
     mail = mailpy.Mail("") #this is silly and could be cleaned up
     (gt_objects, regionlets_det_objects) = evaluate(min_score=regionlets_score_intervals[0], \
-        det_method='regionlets', mail=mail, obj_class=obj_class)
+        det_method='regionlets', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#6"
 
     (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
-        det_method='lsvm', mail=mail, obj_class=obj_class)
+        det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
     print "HELLO#7"
 
@@ -2083,7 +2091,8 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
 def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
-    obj_class = "car", doctor_clutter_probs = True):
+    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = False, \
+    include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
@@ -2092,7 +2101,7 @@ def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs)
+        "regionlets", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
     print "HELLO#2"
 
 
@@ -2108,13 +2117,15 @@ def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
 
     mail = mailpy.Mail("") #this is silly and could be cleaned up
     (gt_objects, regionlets_det_objects) = evaluate(min_score=regionlets_score_intervals[0], \
-        det_method='regionlets', mail=mail, obj_class=obj_class)
+        det_method='regionlets', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#6"
 
 ########### CLEAN THIS UP BEGIN
     lsvm_score_intervals = [2] #arbitrary!
     (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
-        det_method='lsvm', mail=mail, obj_class=obj_class)
+        det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
     print "HELLO#7"
 
