@@ -1509,7 +1509,11 @@ if __name__ == "__main__":
 	stdout = sys.stdout
 	sys.stdout = open(eval_metrics_file, 'w')
 
-	eval_results(results_folder, SEQUENCES_TO_PROCESS, info_by_run)
+	if(RUNS_COMPLETED_ALREADY == 0):
+		eval_results(results_folder, SEQUENCES_TO_PROCESS, info_by_run)
+	else:
+		eval_results(results_folder, SEQUENCES_TO_PROCESS)
+
 	print "Cached likelihoods = ", CACHED_LIKELIHOODS
 	print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
 	print "RBPF runtime (sum of all runs) = ", t1-t0
