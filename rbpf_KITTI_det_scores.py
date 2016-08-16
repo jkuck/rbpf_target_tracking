@@ -37,11 +37,24 @@ import os
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
 NUMBER_OF_RUNS = 100
-RUNS_COMPLETED_ALREADY = 23
+RUNS_COMPLETED_ALREADY = 0
 #N_PARTICLES = 1 #number of particles used in the particle filter
 #DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
-DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
+DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_ignored_gt"
 #DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
+
+
+#Should ignored ground truth objects be included when calculating probabilities? (double check specifics)
+INCLUDE_IGNORED_GT = True
+INCLUDE_DONTCARE_IN_GT = False
+
+#False doesn't really make sense because when actually running without ground truth information we don't know
+#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+#If this occured, it would make sense to try excluding these detections.)
+INCLUDE_IGNORED_DETECTIONS = True 
+
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
@@ -71,12 +84,12 @@ LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
 SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
 (measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
-    obj_class = "car", doctor_clutter_probs = True)
+    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = INCLUDE_IGNORED_GT, include_dontcare_in_gt = INCLUDE_DONTCARE_IN_GT, include_ignored_detections = INCLUDE_IGNORED_DETECTIONS)
 
 #SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
 #(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 #	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
-#    obj_class = "car", doctor_clutter_probs = True)
+#    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = INCLUDE_IGNORED_GT, include_dontcare_in_gt = INCLUDE_DONTCARE_IN_GT, include_ignored_detections = INCLUDE_IGNORED_DETECTIONS)
 
 
 #from learn_params
@@ -1501,7 +1514,7 @@ if __name__ == "__main__":
 					#works for runtime and number of times resampling is performed
 					cur_run_info[info_idx] += cur_seq_info[info_idx]
 
-			filename = '%s/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
 			if not os.path.exists(os.path.dirname(filename)):
 				try:
 					os.makedirs(os.path.dirname(filename))
