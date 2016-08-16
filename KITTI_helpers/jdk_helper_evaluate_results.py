@@ -866,21 +866,23 @@ def print_multi_run_metrics(packed_metrics, number_of_runs):
         print printEntry("Ground Truth Trajectories", packed_metrics[18])
         print printEntry("Tracker Objects", packed_metrics[19])
         print printEntry("Tracker Trajectories", packed_metrics[20])
-        print ""
-        print "RBPF performance information:"   
-        print printEntry("Number of time resampling performed", packed_metrics[21])
-        print printEntry("Single run run-time", packed_metrics[22])
+        if(len(packed_metrics) == 23):
+            print ""
+            print "RBPF performance information:"   
+            print printEntry("Number of time resampling performed", packed_metrics[21])
+            print printEntry("Single run run-time", packed_metrics[22])
      
         print "="*80
 
-def eval_results(all_run_results, seq_idx_to_eval, info_by_run):
+def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
     """
     Inputs:
     - seq_idx_to_eval: a list of sequence indices to evaluate
     - all_run_results: filepath of folder containing folders of results from individual runs (subfolders are where 
         .txt files are located containing results for each sequence to evaluate)
     - info_by_run: a list of length equal to the number of runs, where each element is a list containing
-        info from that run (all should be the same length and have the same type of info)
+        info from that run (all should be the same length and have the same type of info) if available.
+        If not available, this will be None
     """
     all_runs_metrics = None
 
@@ -889,11 +891,13 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run):
         if os.path.isdir(cur_run_results):
             cur_run_metrics = evaluate(cur_run_results + "/", seq_idx_to_eval) # + operator used for string concatenation!
             orig_metrics_len = len(cur_run_metrics)
-            cur_run_metrics.resize(len(cur_run_metrics) + len(info_by_run[0]))
-            for info_idx in range(len(info_by_run[0])):
-                assert(len(info_by_run[0]) == len(info_by_run[number_of_runs]))
-                assert(number_of_runs < len(info_by_run)), number_of_runs
-                cur_run_metrics[orig_metrics_len + info_idx] = info_by_run[number_of_runs][info_idx]
+            #append run info, if given, to evaluation metrics
+            if info_by_run:
+                cur_run_metrics.resize(len(cur_run_metrics) + len(info_by_run[0]))
+                for info_idx in range(len(info_by_run[0])):
+                    assert(len(info_by_run[0]) == len(info_by_run[number_of_runs]))
+                    assert(number_of_runs < len(info_by_run)), number_of_runs
+                    cur_run_metrics[orig_metrics_len + info_idx] = info_by_run[number_of_runs][info_idx]
             cur_run_metrics = np.expand_dims(cur_run_metrics, axis=0)
             if all_runs_metrics == None:
                 all_runs_metrics = cur_run_metrics
