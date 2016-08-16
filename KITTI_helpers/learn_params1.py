@@ -1412,13 +1412,13 @@ class MultiDetections:
                     if self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection:
                         all_assoc_gt_ids_by_frame[seq_idx][frame_idx].append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
 
-        assert(len(all_gt_ids_by_frame) == len(gt_objects))
-        assert(len(all_assoc_gt_ids_by_frame) == len(gt_objects))
+        assert(len(all_gt_ids_by_frame) == len(self.gt_objects))
+        assert(len(all_assoc_gt_ids_by_frame) == len(self.gt_objects))
         for seq_idx in range(len(self.gt_objects)):
-            assert(len(all_gt_ids_by_frame[seq_idx]) == len(gt_objects[seq_idx]))
-            assert(len(all_assoc_gt_ids_by_frame[seq_idx]) == len(gt_objects[seq_idx]))
+            assert(len(all_gt_ids_by_frame[seq_idx]) == len(self.gt_objects[seq_idx]))
+            assert(len(all_assoc_gt_ids_by_frame[seq_idx]) == len(self.gt_objects[seq_idx]))
             for frame_idx in range(len(self.gt_objects[seq_idx]) - 1):
-                assert(len(all_gt_ids_by_frame[seq_idx][frame_idx]) == len(gt_objects[seq_idx][frame_idx]))
+                assert(len(all_gt_ids_by_frame[seq_idx][frame_idx]) == len(self.gt_objects[seq_idx][frame_idx]))
 
         return (all_gt_ids_by_frame, all_assoc_gt_ids_by_frame)
 
@@ -1452,12 +1452,12 @@ class MultiDetections:
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                     if (not (seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id) in gt_track_ids):
                         gt_track_ids.append((seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id))
-            print "sequence ", seq_idx, " contains ", len(gt_objects[seq_idx][-1]),
-            print " objects alive in the last frame (index ",  len(gt_objects[seq_idx]) - 1, ") and ", len(gt_objects[seq_idx][-2]),
+            print "sequence ", seq_idx, " contains ", len(self.gt_objects[seq_idx][-1]),
+            print " objects alive in the last frame (index ",  len(self.gt_objects[seq_idx]) - 1, ") and ", len(self.gt_objects[seq_idx][-2]),
             print " objects alive in the 2nd to last frame "
             #debug
 
-            total_never_dead_count += len(gt_objects[seq_idx][-1])
+            total_never_dead_count += len(self.gt_objects[seq_idx][-1])
 
             #end debug
 
@@ -1594,7 +1594,7 @@ class MultiDetections:
         - near_border: boolean, death probabilities for ground truth obects near the border on
             their last time instance alive or not near the border?
         """
-        death_probs = []
+        death_probs = [-99]
         death_counts = []
         living_counts = []
         for i in range(5):
@@ -1603,7 +1603,7 @@ class MultiDetections:
             death_counts.append(death_count)
             living_counts.append(living_count)
             if death_count + living_count == 0:
-                death_probs.append(0)
+                death_probs.append(1.0)
             else:
                 death_probs.append(death_count/(death_count + living_count))
         return (death_probs, death_counts, living_counts)
@@ -2076,8 +2076,59 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
     birth_probabilities = [birth_probabilities_regionlets, birth_probabilities_lsvm]
     print "HELLO#8"
 
-    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs)
+    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
+
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+
+def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
+    obj_class = "car", doctor_clutter_probs = True):
+    """
+    Input:
+    - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
+        and subtract .0000001 from element 0
+    """
+    print "HELLO#1"
+    (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
+        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
+        "regionlets", obj_class, doctor_clutter_probs)
+    print "HELLO#2"
+
+
+    returnTargSets = []
+    for seq_idx in range(len(measurementTargetSetsBySequence_regionlets)):
+        returnTargSets.append([measurementTargetSetsBySequence_regionlets[seq_idx]])
+    print "HELLO#4"
+
+    emission_probs = [target_emission_probs_regionlets]
+    clutter_probs = [clutter_probabilities_regionlets]
+    meas_noise_covs = [meas_noise_covs_regionlets]
+    print "HELLO#5"
+
+    mail = mailpy.Mail("") #this is silly and could be cleaned up
+    (gt_objects, regionlets_det_objects) = evaluate(min_score=regionlets_score_intervals[0], \
+        det_method='regionlets', mail=mail, obj_class=obj_class)
+    print "HELLO#6"
+
+########### CLEAN THIS UP BEGIN
+    lsvm_score_intervals = [2] #arbitrary!
+    (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
+        det_method='lsvm', mail=mail, obj_class=obj_class)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+    print "HELLO#7"
+
+    (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
+        lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
+
+    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+
+########## CLEAN THIS UP END
+    birth_probabilities = [birth_probabilities_regionlets]
+    print "HELLO#8"
+
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
 
 
@@ -2105,30 +2156,30 @@ if __name__ == "__main__":
 ###########    score_intervals_regionlets = [i for i in range(2, 20)]
 ############    score_intervals_lsvm = [0.0]
 ############    score_intervals_regionlets = [2.0]
-    score_intervals = [2.0]
-    get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True,\
-                        print_info=True)
-###########
-###########    #### Check death probabilities #######
-###########    (gt_objects, lsvm_det_objects) = evaluate(min_score=0.0, det_method='lsvm', mail=mail, obj_class="car")
-###########    (gt_objects, regionlets_det_objects) = evaluate(min_score=2.0, det_method='regionlets', mail=mail, obj_class="car")
-###########    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
-############    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects)
-############    multi_detections = MultiDetections(gt_objects, lsvm_det_objects, lsvm_det_objects)
-###########    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
-###########    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
-###########    print "death probabilities near border:", death_probs_near_border
-###########    print "death counts near border:", death_counts_near_border
-###########    print "living counts near border:", living_counts_near_border
-###########    print "death probabilities not near border:", death_probs_not_near_border
-###########    print "death counts not near border:", death_counts_not_near_border
-###########    print "living counts not near border:", living_counts_not_near_border
-###########
-###########    (all_birth_probabilities_regionlets, all_birth_probabilities_lsvm) = apply_function_on_intervals_2_det(score_intervals_regionlets, \
-###########        score_intervals_lsvm, multi_detections.get_birth_probabilities_score_range)
-###########
-###########    print "regionlets birth probabilities: ", all_birth_probabilities_regionlets
-###########    print "lsvm birth probabilities: ", all_birth_probabilities_lsvm
+#####    score_intervals = [2.0]
+#####    get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True,\
+#####                        print_info=True)
+
+    #### Check death probabilities #######
+    (gt_objects, lsvm_det_objects) = evaluate(min_score=0.0, det_method='lsvm', mail=mail, obj_class="car")
+    (gt_objects, regionlets_det_objects) = evaluate(min_score=2.0, det_method='regionlets', mail=mail, obj_class="car")
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+#    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects)
+#    multi_detections = MultiDetections(gt_objects, lsvm_det_objects, lsvm_det_objects)
+    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+    print "death probabilities near border:", death_probs_near_border
+    print "death counts near border:", death_counts_near_border
+    print "living counts near border:", living_counts_near_border
+    print "death probabilities not near border:", death_probs_not_near_border
+    print "death counts not near border:", death_counts_not_near_border
+    print "living counts not near border:", living_counts_not_near_border
+
+    (all_birth_probabilities_regionlets, all_birth_probabilities_lsvm) = apply_function_on_intervals_2_det(score_intervals_regionlets, \
+        score_intervals_lsvm, multi_detections.get_birth_probabilities_score_range)
+
+    print "regionlets birth probabilities: ", all_birth_probabilities_regionlets
+    print "lsvm birth probabilities: ", all_birth_probabilities_lsvm
 
 
 #    score_intervals = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
