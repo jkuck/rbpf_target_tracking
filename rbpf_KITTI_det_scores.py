@@ -21,6 +21,7 @@ sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
+from learn_params1 import get_meas_target_sets_regionlets_general_format
 from jdk_helper_evaluate_results import eval_results
 
 #from multiple_meas_per_time_assoc_priors import HiddenState
@@ -40,7 +41,7 @@ RUNS_COMPLETED_ALREADY = 0
 #N_PARTICLES = 1 #number of particles used in the particle filter
 #DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
 #DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
-DESCRIPTION_OF_RUN = "lsvm_and_regionlets_no_score_intervals"
+DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
@@ -70,9 +71,16 @@ SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
 
 #(measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
 #	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
+#(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+#	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
+#    obj_class = "car", doctor_clutter_probs = True)
+
+
 (measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
+	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
     obj_class = "car", doctor_clutter_probs = True)
+
+
 #from learn_params
 #BIRTH_COUNT_PRIOR = [0.9371030016191306, 0.0528085689376012, 0.007223813675426578, 0.0016191306513887158, 0.000747291069871715, 0.00012454851164528583, 0, 0.00012454851164528583, 0.00012454851164528583, 0, 0, 0, 0, 0.00012454851164528583]
 #from learn_params1, not counting 'ignored' ground truth
