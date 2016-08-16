@@ -37,11 +37,11 @@ import os
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
 NUMBER_OF_RUNS = 100
-RUNS_COMPLETED_ALREADY = 0
+RUNS_COMPLETED_ALREADY = 23
 #N_PARTICLES = 1 #number of particles used in the particle filter
 #DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
-#DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
-DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
+DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
+#DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
@@ -63,24 +63,20 @@ USE_CONSTANT_R = False
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
 
-#REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
-#LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-REGIONLETS_SCORE_INTERVALS = [2]
+REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
+#REGIONLETS_SCORE_INTERVALS = [2]
 #LSVM_SCORE_INTERVALS = [0]
-#SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
-SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
 
-#(measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
-#	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
-
-#(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-#	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
-#    obj_class = "car", doctor_clutter_probs = True)
-
-
+SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
 (measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
+	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
     obj_class = "car", doctor_clutter_probs = True)
+
+#SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+#(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+#	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
+#    obj_class = "car", doctor_clutter_probs = True)
 
 
 #from learn_params
