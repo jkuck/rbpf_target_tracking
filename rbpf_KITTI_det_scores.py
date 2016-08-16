@@ -41,7 +41,7 @@ RUNS_COMPLETED_ALREADY = 0
 #N_PARTICLES = 1 #number of particles used in the particle filter
 #DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
 #DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
-DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
+DESCRIPTION_OF_RUN = "regionlets_only_with_score_intervals"
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
@@ -63,9 +63,9 @@ USE_CONSTANT_R = False
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
 
-#REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
 #LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-REGIONLETS_SCORE_INTERVALS = [2]
+#REGIONLETS_SCORE_INTERVALS = [2]
 #LSVM_SCORE_INTERVALS = [0]
 SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
 
