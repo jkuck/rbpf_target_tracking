@@ -36,10 +36,10 @@ import os
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
 NUMBER_OF_RUNS = 100
-RUNS_COMPLETED_ALREADY = 56
+RUNS_COMPLETED_ALREADY = 99
 #N_PARTICLES = 1 #number of particles used in the particle filter
-DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
-#DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
+#DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
+DESCRIPTION_OF_RUN = "lsvm_and_regionlets"
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
