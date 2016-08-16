@@ -840,7 +840,7 @@ def printEntry(key, vals,width=(43,20)):
 
 def print_multi_run_metrics(packed_metrics, number_of_runs):
         print ("tracking evaluation summary over %d runs"%number_of_runs).center(80,"=")
-        print printEntry("Metric", ["Mean", "Minimum", "Maximum", "Standard Deviation"])
+        print printEntry("Metric", ["Median", "Mean", "Minimum", "Maximum", "Standard Deviation"])
         print printEntry("Multiple Object Tracking Accuracy (MOTA)", packed_metrics[0])
         print printEntry("Multiple Object Tracking Precision (MOTP)", packed_metrics[1])
         print printEntry("Multiple Object Tracking Accuracy (MOTAL)", packed_metrics[2])
@@ -905,6 +905,7 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
                 all_runs_metrics = np.concatenate((all_runs_metrics, cur_run_metrics), axis=0)
             number_of_runs+=1
 
+    metric_medians = np.median(all_runs_metrics, axis=0)
     metric_means = np.mean(all_runs_metrics, axis=0)
     metric_mins = np.amin(all_runs_metrics, axis=0)
     metric_maxs = np.amax(all_runs_metrics, axis=0)
@@ -912,7 +913,7 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
 
     packed_metrics = []
     for metric_idx in range(len(metric_means)):
-        cur_metric_stats = [metric_means[metric_idx], metric_mins[metric_idx],\
+        cur_metric_stats = [metric_medians[metric_idx], metric_means[metric_idx], metric_mins[metric_idx],\
                             metric_maxs[metric_idx], metric_std_devs[metric_idx]]
         packed_metrics.append(cur_metric_stats)
 
