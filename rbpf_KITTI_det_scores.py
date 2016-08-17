@@ -1454,6 +1454,10 @@ if __name__ == "__main__":
 	if len(sys.argv)!=6:
 		print "Supply 5 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
 		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool)"
+		print "received ", len(sys.argv), " arguments"
+		for i in range(len(sys.argv)):
+			print sys.argv[i]
+
 		sys.exit(1);
 	N_PARTICLES = int(sys.argv[1])
 	for i in range(2,6):

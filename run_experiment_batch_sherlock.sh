@@ -1,42 +1,42 @@
 #lsvm_and_regionlets_with_score_intervals
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
 
 #lsvm_and_regionlets_no_score_intervals
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals False
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals False
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals False
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals False
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
 
 #regionlets_only_with_score_intervals
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals True
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals True
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
 
 #regionlets_only_no_score_intervals
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals False
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals False
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals False
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt False --include_dontcare_in_gt False --use_regionlets_and_lsvm False --sort_dets_on_intervals False
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=False,SORT_DETS_ON_INTERVALS=False submit_single_rbpf_job_sherlock.sbatch
 
 
 #lsvm_and_regionlets_include_ignored_gt
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt True --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt True --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt True --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt True --include_dontcare_in_gt False --use_regionlets_and_lsvm True --sort_dets_on_intervals True
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=False,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
 
 #lsvm_and_regionlets_include_dontcare_in_gt
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt False --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt False --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt False --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt False --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=False,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
 
 #lsvm_and_regionlets_include_ignored_and_dontcare_in_gt
-./submit_single_rbpf_job_sherlock.sh --num_particles 25 --include_ignored_gt True --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 100 --include_ignored_gt True --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-./submit_single_rbpf_job_sherlock.sh --num_particles 400 --include_ignored_gt True --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
-#./submit_single_rbpf_job_sherlock.sh --num_particles 1600 --include_ignored_gt True --include_dontcare_in_gt True --use_regionlets_and_lsvm True --sort_dets_on_intervals True
+sbatch --export=NUM_PARTICLES=25,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=100,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+sbatch --export=NUM_PARTICLES=400,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
+#sbatch --export=NUM_PARTICLES=1600,INCLUDE_IGNORED_GT=True,INCLUDE_DONTCARE_IN_GT=True,USE_REGIONLETS_AND_LSVM=True,SORT_DETS_ON_INTERVALS=True submit_single_rbpf_job_sherlock.sbatch
