@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ml load python/2.7.5
+
 pip install virtualenv
 virtualenv venv
 source venv/bin/activate
