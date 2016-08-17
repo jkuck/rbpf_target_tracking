@@ -277,7 +277,7 @@ class trackingEvaluation(object):
     def loadGroundtruth(self, include_dontcare_in_gt):
         """Helper function to load ground truth"""
         try:
-            self._loadData(self.gt_path, include_dontcare_in_gt, cls=self.cls, loading_groundtruth=True)
+            self._loadData(self.gt_path, cls=self.cls, include_dontcare_in_gt=include_dontcare_in_gt, loading_groundtruth=True)
         except IOError:
             return False
         return True
@@ -291,7 +291,7 @@ class trackingEvaluation(object):
             return False
         return True
 
-    def _loadData(self, root_dir, include_dontcare_in_gt, cls, min_score=-1000, loading_groundtruth=False):
+    def _loadData(self, root_dir, cls, include_dontcare_in_gt=False, min_score=-1000, loading_groundtruth=False):
         """
             Generic loader for ground truth and tracking data.
             Use loadGroundtruth() or loadDetections() to load this data.

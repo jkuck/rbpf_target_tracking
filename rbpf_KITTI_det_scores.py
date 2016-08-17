@@ -39,21 +39,16 @@ SEQUENCES_TO_PROCESS = [0]
 NUMBER_OF_RUNS = 100
 RUNS_COMPLETED_ALREADY = 0
 #N_PARTICLES = 1 #number of particles used in the particle filter
-#DESCRIPTION_OF_RUN = "lsvm_and_regionlets_duplicate"
-DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_ignored_gt"
-#DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
 
-
-#Should ignored ground truth objects be included when calculating probabilities? (double check specifics)
-INCLUDE_IGNORED_GT = True
-INCLUDE_DONTCARE_IN_GT = False
-
-#False doesn't really make sense because when actually running without ground truth information we don't know
-#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
-#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
-#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
-#If this occured, it would make sense to try excluding these detections.)
-INCLUDE_IGNORED_DETECTIONS = True 
+#Variables defined in main ARE global I think, not needed here (triple check...)
+#define global variables, which will be set in main
+#SCORE_INTERVALS = None
+#TARGET_EMISSION_PROBS = None
+#CLUTTER_PROBABILITIES = None
+#BIRTH_PROBABILITIES = None
+#MEAS_NOISE_COVS = None
+#BORDER_DEATH_PROBABILITIES = None
+#NOT_BORDER_DEATH_PROBABILITIES = None
 
 
 #SEQUENCES_TO_PROCESS = [i for i in range(21)]
@@ -70,26 +65,12 @@ USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-#SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
 USE_CONSTANT_R = False
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
 
-REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
-LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-#REGIONLETS_SCORE_INTERVALS = [2]
-#LSVM_SCORE_INTERVALS = [0]
 
-SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
-(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
-    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = INCLUDE_IGNORED_GT, include_dontcare_in_gt = INCLUDE_DONTCARE_IN_GT, include_ignored_detections = INCLUDE_IGNORED_DETECTIONS)
-
-#SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
-#(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-#	MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
-#    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = INCLUDE_IGNORED_GT, include_dontcare_in_gt = INCLUDE_DONTCARE_IN_GT, include_ignored_detections = INCLUDE_IGNORED_DETECTIONS)
 
 
 #from learn_params
@@ -1467,17 +1448,92 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 
 
 if __name__ == "__main__":
-
+	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=2:
-		print "Supply the number of particles as a command"
-
+	if len(sys.argv)!=6:
+		print "Supply 5 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
+		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool)"
+		sys.exit(1);
 	N_PARTICLES = int(sys.argv[1])
+	for i in range(2,6):
+		if(sys.argv[i] != 'True' and sys.argv[i] != 'False'):
+			print "Booleans must be supplied as 'True' or 'False' (without quotes)"
+			sys.exit(1);
+
+
+	#Should ignored ground truth objects be included when calculating probabilities? (double check specifics)
+	include_ignored_gt = (sys.argv[2] == 'True')
+	include_dontcare_in_gt = (sys.argv[3] == 'True')
+	use_regionlets_and_lsvm = (sys.argv[4] == 'True')
+	sort_dets_on_intervals = (sys.argv[5] == 'True')
+
+	if (not include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
+		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_with_score_intervals"
+
+	elif (not include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and (not sort_dets_on_intervals):
+		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_no_score_intervals"
+		
+	elif (not include_ignored_gt) and (not include_dontcare_in_gt) and (not use_regionlets_and_lsvm) and (sort_dets_on_intervals):
+			DESCRIPTION_OF_RUN = "regionlets_only_with_score_intervals"
+
+	elif (not include_ignored_gt) and (not include_dontcare_in_gt) and (not use_regionlets_and_lsvm) and (not sort_dets_on_intervals):
+		DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
+
+
+
+	elif (include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
+		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_ignored_gt"
+
+	elif (not include_ignored_gt) and (include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
+		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_dontcare_in_gt"
+
+	elif (include_ignored_gt) and (include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
+		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_ignored_and_dontcare_in_gt"
+
+	else:
+		print "Unexpected combination of boolean arguments"
+		sys.exit(1);
+
+	#False doesn't really make sense because when actually running without ground truth information we don't know
+	#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+	#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+	#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+	#If this occured, it would make sense to try excluding these detections.)
+	include_ignored_detections = True 
+
+	if sort_dets_on_intervals:
+		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
+	else:
+		REGIONLETS_SCORE_INTERVALS = [2]
+		LSVM_SCORE_INTERVALS = [0]
+
+	#set global variables
+	#global SCORE_INTERVALS
+	#global TARGET_EMISSION_PROBS
+	#global CLUTTER_PROBABILITIES
+	#global BIRTH_PROBABILITIES
+	#global MEAS_NOISE_COVS
+	#global BORDER_DEATH_PROBABILITIES
+	#global NOT_BORDER_DEATH_PROBABILITIES
+
+	#use regionlets and lsvm detections
+	if use_regionlets_and_lsvm:
+		SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+		(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+			MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
+		    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
+
+	#only use regionlets detections
+	else: 
+		SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+		(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+			MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
+		    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
+
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
-
-
 	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
 	n_frames         = []
 	sequence_name    = []
@@ -1491,13 +1547,21 @@ if __name__ == "__main__":
 	print sequence_name     
 	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 	#for seq_idx in range(len(measurementTargetSetsBySequence)):
-	results_folder = './rbpf_KITTI_results/%s' % results_folder_name
+	results_folder = './rbpf_KITTI_results_seq0_only/%s' % results_folder_name
 	t0 = time.time()
 	info_by_run = [] #list of info from each run
 #	for run_idx in range(NUMBER_OF_RUNS):
 	for run_idx in range(RUNS_COMPLETED_ALREADY, NUMBER_OF_RUNS):
 		cur_run_info = None
 		for seq_idx in SEQUENCES_TO_PROCESS:
+			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+			if not os.path.exists(os.path.dirname(filename)):
+				try:
+					os.makedirs(os.path.dirname(filename))
+				except OSError as exc: # Guard against race condition
+					if exc.errno != errno.EEXIST:
+						raise
+
 			print "Processing sequence: ", seq_idx
 			tA = time.time()
 			(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
@@ -1514,13 +1578,6 @@ if __name__ == "__main__":
 					#works for runtime and number of times resampling is performed
 					cur_run_info[info_idx] += cur_seq_info[info_idx]
 
-			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
-			if not os.path.exists(os.path.dirname(filename)):
-				try:
-					os.makedirs(os.path.dirname(filename))
-				except OSError as exc: # Guard against race condition
-					if exc.errno != errno.EEXIST:
-						raise
 			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
 		info_by_run.append(cur_run_info)
 
@@ -1532,9 +1589,9 @@ if __name__ == "__main__":
 	sys.stdout = open(eval_metrics_file, 'w')
 
 	if(RUNS_COMPLETED_ALREADY == 0):
-		eval_results(results_folder, SEQUENCES_TO_PROCESS, info_by_run)
+		eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS, info_by_run) # + operateor used for string concatenation!
 	else:
-		eval_results(results_folder, SEQUENCES_TO_PROCESS)
+		eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
 
 	print "Description of run: ", DESCRIPTION_OF_RUN
 	print "Cached likelihoods = ", CACHED_LIKELIHOODS
