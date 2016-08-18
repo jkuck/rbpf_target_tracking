@@ -1591,15 +1591,18 @@ if __name__ == "__main__":
 	run_complete_f.write("This run took %f seconds\n" % (t1-t0))
 	run_complete_f.close()
 
-	#check if all the runs are complete
-	all_runs_complete = True
-	for cur_run_idx in range(1, total_runs + 1):
-		cur_run_complete_filename = '%s/results_by_run/run_%d/done.txt' % (results_folder, cur_run_idx)
-		if (not os.path.isfile(cur_run_complete_filename)):
-			all_runs_complete = False
+	if(run_idx == total_runs): #one run is responsible for evaluating all the results
+		#check if all the runs are complete
+		all_runs_complete = False
+		while(not all_runs_complete):
+			all_runs_complete = True
+			for cur_run_idx in range(1, total_runs + 1):
+				cur_run_complete_filename = '%s/results_by_run/run_%d/done.txt' % (results_folder, cur_run_idx)
+				if (not os.path.isfile(cur_run_complete_filename)):
+					all_runs_complete = False
+			time.sleep(1) #wait and check again
 
-	#evaluate the results if all runs are complete
-	if all_runs_complete:
+		#evaluate the results when all runs are complete
 		eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
 		stdout = sys.stdout
 		sys.stdout = open(eval_metrics_file, 'w')
