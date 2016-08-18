@@ -36,8 +36,6 @@ import os
 
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
-NUMBER_OF_RUNS = 100
-RUNS_COMPLETED_ALREADY = 0
 #N_PARTICLES = 1 #number of particles used in the particle filter
 
 #Variables defined in main ARE global I think, not needed here (triple check...)
@@ -1265,6 +1263,7 @@ def run_rbpf_on_targetset(target_sets):
 	Output:
 	- max_weight_target_set: TargetSet from a (could be multiple with equal weight) maximum
 		importance weight particle after processing all measurements
+	- number_resamplings: the number of times resampling was performed
 	"""
 	particle_set = []
 	for i in range(0, N_PARTICLES):
@@ -1333,9 +1332,9 @@ def run_rbpf_on_targetset(target_sets):
 					break
 		#done debugging
 
-		if iter%100 == 0:
-			print iter
-			display_target_counts(particle_set, time_stamp)
+#		if iter%100 == 0:
+#			print iter
+#			display_target_counts(particle_set, time_stamp)
 
 
 		if (get_eff_num_particles(particle_set) < N_PARTICLES/RESAMPLE_RATIO):
@@ -1348,8 +1347,6 @@ def run_rbpf_on_targetset(target_sets):
 
 		iter+=1
 
-	print "resampling performed %d times" % number_resamplings
-
 	max_imprt_weight = -1
 	for particle in particle_set:
 		if(particle.importance_weight > max_imprt_weight):
@@ -1359,7 +1356,7 @@ def run_rbpf_on_targetset(target_sets):
 			max_weight_target_set = particle.targets
 
 	run_info = [number_resamplings]
-	return (max_weight_target_set, run_info)
+	return (max_weight_target_set, run_info, number_resamplings)
 
 
 def test_read_write_data_KITTI(target_set):
@@ -1451,11 +1448,17 @@ if __name__ == "__main__":
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=6:
-		print "Supply 5 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
-		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool)"
+	if len(sys.argv)!=8:
+		print "Supply 7 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
+		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs"
+		print "received ", len(sys.argv), " arguments"
+		for i in range(len(sys.argv)):
+			print sys.argv[i]
+
 		sys.exit(1);
 	N_PARTICLES = int(sys.argv[1])
+	run_idx = int(sys.argv[6]) #the index of this run
+	total_runs = int(sys.argv[7]) #the total number of runs, for checking whether all runs are finished and results should be evaluated
 	for i in range(2,6):
 		if(sys.argv[i] != 'True' and sys.argv[i] != 'False'):
 			print "Booleans must be supplied as 'True' or 'False' (without quotes)"
@@ -1547,66 +1550,80 @@ if __name__ == "__main__":
 	print sequence_name     
 	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 	#for seq_idx in range(len(measurementTargetSetsBySequence)):
-	results_folder = './rbpf_KITTI_results_seq0_only/%s' % results_folder_name
+	results_folder = './rbpf_KITTI_results_seq0_par_exec_test1/%s' % results_folder_name
 	t0 = time.time()
 	info_by_run = [] #list of info from each run
-#	for run_idx in range(NUMBER_OF_RUNS):
-	for run_idx in range(RUNS_COMPLETED_ALREADY, NUMBER_OF_RUNS):
-		cur_run_info = None
-		for seq_idx in SEQUENCES_TO_PROCESS:
-			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
-			if not os.path.exists(os.path.dirname(filename)):
-				try:
-					os.makedirs(os.path.dirname(filename))
-				except OSError as exc: # Guard against race condition
-					if exc.errno != errno.EEXIST:
-						raise
+	cur_run_info = None
+	for seq_idx in SEQUENCES_TO_PROCESS:
+		filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+		if not os.path.exists(os.path.dirname(filename)):
+			try:
+				os.makedirs(os.path.dirname(filename))
+			except OSError as exc: # Guard against race condition
+				if exc.errno != errno.EEXIST:
+					raise
 
-			print "Processing sequence: ", seq_idx
-			tA = time.time()
-			(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
-			tB = time.time()
-			this_seq_run_time = tB - tA
-			cur_seq_info.append(this_seq_run_time)
-			if cur_run_info == None:
-				cur_run_info = cur_seq_info
-			else:
-				assert(len(cur_run_info) == len(cur_seq_info))
-				for info_idx in len(cur_run_info):
-					#assuming for now info can be summed over each sequence in a run!
-					#works for runtime and number of times resampling is performed
-					cur_run_info[info_idx] += cur_seq_info[info_idx]
+		print "Processing sequence: ", seq_idx
+		tA = time.time()
+		(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+		tB = time.time()
+		this_seq_run_time = tB - tA
+		cur_seq_info.append(this_seq_run_time)
+		if cur_run_info == None:
+			cur_run_info = cur_seq_info
+		else:
+			assert(len(cur_run_info) == len(cur_seq_info))
+			for info_idx in len(cur_run_info):
+				#assuming for now info can be summed over each sequence in a run!
+				#works for runtime and number of times resampling is performed
+				cur_run_info[info_idx] += cur_seq_info[info_idx]
 
-			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
-		info_by_run.append(cur_run_info)
+		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+	info_by_run.append(cur_run_info)
 
 	t1 = time.time()
 
+	indicate_run_complete_filename = '%s/results_by_run/run_%d/done.txt' % (results_folder, run_idx)
+	run_complete_f = open(indicate_run_complete_filename, 'w')
+	run_complete_f.write("This run is finished (and this file indicates the fact)\n")
+	run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
+	run_complete_f.write("This run took %f seconds\n" % (t1-t0))
+	run_complete_f.close()
 
-	eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
-	stdout = sys.stdout
-	sys.stdout = open(eval_metrics_file, 'w')
+	if(run_idx == total_runs): #one run is responsible for evaluating all the results
+		#check if all the runs are complete
+		all_runs_complete = False
+		while(not all_runs_complete):
+			all_runs_complete = True
+			for cur_run_idx in range(1, total_runs + 1):
+				cur_run_complete_filename = '%s/results_by_run/run_%d/done.txt' % (results_folder, cur_run_idx)
+				if (not os.path.isfile(cur_run_complete_filename)):
+					all_runs_complete = False
+			time.sleep(1) #wait and check again
 
-	if(RUNS_COMPLETED_ALREADY == 0):
-		eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS, info_by_run) # + operateor used for string concatenation!
-	else:
-		eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
+		#evaluate the results when all runs are complete
+		eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+		stdout = sys.stdout
+		sys.stdout = open(eval_metrics_file, 'w')
 
-	print "Description of run: ", DESCRIPTION_OF_RUN
-	print "Cached likelihoods = ", CACHED_LIKELIHOODS
-	print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
-	print "RBPF runtime (sum of all runs) = ", t1-t0
-	print "USE_CONSTANT_R = ", USE_CONSTANT_R
-	print "number of particles = ", N_PARTICLES
-	print "score intervals: ", SCORE_INTERVALS
-	print "run on sequences: ", SEQUENCES_TO_PROCESS
-	print "number of particles = ", N_PARTICLES
+		runs_completed = eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
 
-	sys.stdout.close()
-	sys.stdout = stdout
+		print "Number of runs completed = ", runs_completed
+		print "Description of run: ", DESCRIPTION_OF_RUN
+		print "Cached likelihoods = ", CACHED_LIKELIHOODS
+		print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+		#print "RBPF runtime (sum of all runs) = ", t1-t0
+		print "USE_CONSTANT_R = ", USE_CONSTANT_R
+		print "number of particles = ", N_PARTICLES
+		print "score intervals: ", SCORE_INTERVALS
+		print "run on sequences: ", SEQUENCES_TO_PROCESS
+		print "number of particles = ", N_PARTICLES
 
-	print "Printing works normally again!"
+		sys.stdout.close()
+		sys.stdout = stdout
+
+		print "Printing works normally again!"
 
 
 
