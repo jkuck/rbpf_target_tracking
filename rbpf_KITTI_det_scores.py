@@ -1550,7 +1550,7 @@ if __name__ == "__main__":
 	print sequence_name     
 	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 	#for seq_idx in range(len(measurementTargetSetsBySequence)):
-	results_folder = './rbpf_KITTI_results_seq0_par_exec/%s' % results_folder_name
+	results_folder = './rbpf_KITTI_results_seq0_par_exec_dup/%s' % results_folder_name
 	t0 = time.time()
 	info_by_run = [] #list of info from each run
 	cur_run_info = None
