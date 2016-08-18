@@ -887,6 +887,14 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
     Output:
     - number_of_runs: the number of runs evaluated over
     """
+    print "debugging jdk_helpers_evaluate_results.py eval_results:"
+    print "all_run_results:"
+    print all_run_results
+    print "seq_idx_to_eval:"
+    print seq_idx_to_eval
+    print "info_by_run:"
+    print info_by_run
+
     all_runs_metrics = None
 
     number_of_runs = 0
