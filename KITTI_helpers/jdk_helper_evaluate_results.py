@@ -883,6 +883,9 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
     - info_by_run: a list of length equal to the number of runs, where each element is a list containing
         info from that run (all should be the same length and have the same type of info) if available.
         If not available, this will be None
+
+    Output:
+    - number_of_runs: the number of runs evaluated over
     """
     all_runs_metrics = None
 
@@ -920,4 +923,5 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
     print_multi_run_metrics(packed_metrics, number_of_runs)
 
     print "done evaluating results!"
+    return number_of_runs
 

@@ -1,10 +1,10 @@
 #!/bin/bash
 if [ $NUM_PARTICLES -gt "100" ]; then
-    TIME=20:00:00 
+    TIME=20:00 
 elif [ $NUM_PARTICLES -gt "90" ]; then
-    TIME=4:00:00 
+    TIME=10:00 
 else
-    TIME=1:00:00 
+    TIME=3:00 
 fi
 #time you think you need; default is one hour
 #in minutes in this case, hh:mm:ss
@@ -35,4 +35,4 @@ echo $INCLUDE_DONTCARE_IN_GT
 echo $USE_REGIONLETS_AND_LSVM
 echo $SORT_DETS_ON_INTERVALS
 
-python rbpf_KITTI_det_scores.py $NUM_PARTICLES $INCLUDE_IGNORED_GT $INCLUDE_DONTCARE_IN_GT $USE_REGIONLETS_AND_LSVM $SORT_DETS_ON_INTERVALS
+python rbpf_KITTI_det_scores.py $NUM_PARTICLES $INCLUDE_IGNORED_GT $INCLUDE_DONTCARE_IN_GT $USE_REGIONLETS_AND_LSVM $SORT_DETS_ON_INTERVALS $RUN_IDX

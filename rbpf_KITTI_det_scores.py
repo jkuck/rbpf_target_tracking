@@ -36,8 +36,6 @@ import os
 
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
-NUMBER_OF_RUNS = 100
-RUNS_COMPLETED_ALREADY = 0
 #N_PARTICLES = 1 #number of particles used in the particle filter
 
 #Variables defined in main ARE global I think, not needed here (triple check...)
@@ -1451,15 +1449,16 @@ if __name__ == "__main__":
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=6:
+	if len(sys.argv)!=7:
 		print "Supply 5 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
-		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool)"
+		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx"
 		print "received ", len(sys.argv), " arguments"
 		for i in range(len(sys.argv)):
 			print sys.argv[i]
 
 		sys.exit(1);
 	N_PARTICLES = int(sys.argv[1])
+	run_idx = int(sys.argv[6])
 	for i in range(2,6):
 		if(sys.argv[i] != 'True' and sys.argv[i] != 'False'):
 			print "Booleans must be supplied as 'True' or 'False' (without quotes)"
@@ -1551,52 +1550,47 @@ if __name__ == "__main__":
 	print sequence_name     
 	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 	#for seq_idx in range(len(measurementTargetSetsBySequence)):
-	results_folder = './rbpf_KITTI_results_seq0_only/%s' % results_folder_name
+	results_folder = './rbpf_KITTI_results_seq0_par_exec/%s' % results_folder_name
 	t0 = time.time()
 	info_by_run = [] #list of info from each run
-#	for run_idx in range(NUMBER_OF_RUNS):
-	for run_idx in range(RUNS_COMPLETED_ALREADY, NUMBER_OF_RUNS):
-		cur_run_info = None
-		for seq_idx in SEQUENCES_TO_PROCESS:
-			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
-			if not os.path.exists(os.path.dirname(filename)):
-				try:
-					os.makedirs(os.path.dirname(filename))
-				except OSError as exc: # Guard against race condition
-					if exc.errno != errno.EEXIST:
-						raise
+	cur_run_info = None
+	for seq_idx in SEQUENCES_TO_PROCESS:
+		filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+		if not os.path.exists(os.path.dirname(filename)):
+			try:
+				os.makedirs(os.path.dirname(filename))
+			except OSError as exc: # Guard against race condition
+				if exc.errno != errno.EEXIST:
+					raise
 
-			print "Processing sequence: ", seq_idx
-			tA = time.time()
-			(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
-			tB = time.time()
-			this_seq_run_time = tB - tA
-			cur_seq_info.append(this_seq_run_time)
-			if cur_run_info == None:
-				cur_run_info = cur_seq_info
-			else:
-				assert(len(cur_run_info) == len(cur_seq_info))
-				for info_idx in len(cur_run_info):
-					#assuming for now info can be summed over each sequence in a run!
-					#works for runtime and number of times resampling is performed
-					cur_run_info[info_idx] += cur_seq_info[info_idx]
+		print "Processing sequence: ", seq_idx
+		tA = time.time()
+		(estimated_ts, cur_seq_info) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+		tB = time.time()
+		this_seq_run_time = tB - tA
+		cur_seq_info.append(this_seq_run_time)
+		if cur_run_info == None:
+			cur_run_info = cur_seq_info
+		else:
+			assert(len(cur_run_info) == len(cur_seq_info))
+			for info_idx in len(cur_run_info):
+				#assuming for now info can be summed over each sequence in a run!
+				#works for runtime and number of times resampling is performed
+				cur_run_info[info_idx] += cur_seq_info[info_idx]
 
-			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
-		info_by_run.append(cur_run_info)
+		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+	info_by_run.append(cur_run_info)
 
 	t1 = time.time()
-
 
 	eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
 	stdout = sys.stdout
 	sys.stdout = open(eval_metrics_file, 'w')
 
-	if(RUNS_COMPLETED_ALREADY == 0):
-		eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS, info_by_run) # + operateor used for string concatenation!
-	else:
-		eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
+	runs_completed = eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
 
+	print "Number of runs completed = ", runs_completed
 	print "Description of run: ", DESCRIPTION_OF_RUN
 	print "Cached likelihoods = ", CACHED_LIKELIHOODS
 	print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
