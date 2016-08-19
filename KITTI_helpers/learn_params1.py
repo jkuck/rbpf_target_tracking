@@ -1269,13 +1269,19 @@ class MultiDetections:
 
                         assert(match_found == True)
 
-    def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2):
+    def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
+                                            allow_target_rebirth = False):
         """
         Input:
         - min_score_det_1: detections must have score >= min_score_det_1 to be considered
         - max_score_det_1: detections must have score < max_score_det_1 to be considered
         - min_score_det_2: detections must have score >= min_score_det_2 to be considered
         - max_score_det_2: detections must have score < max_score_det_2 to be considered
+        - allow_target_rebirth: boolean, specifies whether ground truth targets are allowed to die and be reborn.
+            In the training data, if ignored ground truth is included, I think there are only two cases where a target
+            dies and is reborn.  I'm not sure if this is an error, but it's small enough to not really make a difference
+            either way.  If ignored ground truths are not included, the number of ground truth objects that die and are 
+            reborn increases, but is still probably small enough to not make much of a difference (would be good to double check!)
 
         Output:
         - all_birth_probabilities: all_birth_probabilities[j] is 
@@ -1284,7 +1290,7 @@ class MultiDetections:
             where a "birth measurement" is a measurement of a ground truth target that has not been associated
             with a detection (of any score value in this AllData instance) on any previous time instance
         """
-        
+
         total_frame_count = 0
         #largest number of detection1 births in a single frame
         max_birth_count1 = 0
@@ -1300,6 +1306,19 @@ class MultiDetections:
             #contains ids of all ground truth tracks that have been previously associated with a detection
             previously_detected_gt_ids = []
             for frame_idx in range(len(self.det_objects1[seq_idx])):
+                if allow_target_rebirth and frame_idx != 0:
+                    this_frame_gt_ids = []
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                        this_frame_gt_ids.append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx-1])):
+                        cur_gt_id = self.gt_objects[seq_idx][frame_idx-1][gt_idx].track_id
+                        #removed detected gt objects that have died from previously_detected_gt_ids
+                        #to allow for rebirth
+                        if not(cur_gt_id in this_frame_gt_ids) and cur_gt_id in previously_detected_gt_ids:
+                            previously_detected_gt_ids.remove(cur_gt_id)
+                            assert(not cur_gt_id in previously_detected_gt_ids)
+
+
                 total_frame_count += 1
                 cur_frame_birth_count1 = 0
                 for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
