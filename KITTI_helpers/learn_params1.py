@@ -1669,6 +1669,7 @@ class AllData:
         if debug:
             print '-'*10
             print "get_prob_target_emission_by_score_range debug info:"
+            print "min_score = ", min_score, " max_score = ", max_score
             print "total_gt_det_associations = ", total_gt_det_associations
             print "total_gt_object_count = ", total_gt_object_count
 
@@ -2041,15 +2042,18 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
         and subtract .0000001 from element 0
     """
+
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
     (measurementTargetSetsBySequence_lsvm, target_emission_probs_lsvm, clutter_probabilities_lsvm, \
         incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(lsvm_score_intervals, \
-        "lsvm", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
+        "lsvm", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#3"
 
 
@@ -2098,10 +2102,12 @@ def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
         and subtract .0000001 from element 0
     """
+
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
 
