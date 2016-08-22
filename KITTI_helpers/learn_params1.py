@@ -1144,13 +1144,6 @@ def get_clutter_probabilities(det_objects):
     return clutter_probabilities
 
 
-def get_clutter_probabilities_score_range_wrapper(min_score, det_method):
-    mail =  mailpy.Mail("")
-    (gt_objects, det_objects) = evaluate(min_score, det_method,mail, obj_class="car")
-    (all_clutter_probabilities, frame_count) = get_clutter_probabilities_score_range_condition_num_meas(det_objects, 2.0, float("inf"))
-    return all_clutter_probabilities
-
-
 
 def apply_function_on_intervals(score_cutoffs, function):
     """
@@ -1214,12 +1207,14 @@ def apply_function_on_intervals_2_det(score_cutoffs_det1, score_cutoffs_det2, fu
     return (function_on_det1_intervals, function_on_det2_intervals)
 
 class MultiDetections:
-    def __init__(self, gt_objects, det_objects1, det_objects2):
+    def __init__(self, gt_objects, det_objects1, det_objects2, training_sequences):
         self.gt_objects = gt_objects
         self.det_objects1 = det_objects1
         self.det_objects2 = det_objects2
         self.store_associations_in_gt()
 
+        # A list of sequence indices that will be used for training
+        self.training_sequences = training_sequences 
     def store_associations_in_gt(self):
         """
         Store a reference to associated detections in every associated ground truth object
@@ -1270,7 +1265,7 @@ class MultiDetections:
                         assert(match_found == True)
 
     def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
-                                            allow_target_rebirth = False):
+                                            allow_target_rebirth = True):
         """
         Input:
         - min_score_det_1: detections must have score >= min_score_det_1 to be considered
@@ -1300,7 +1295,7 @@ class MultiDetections:
         birth_count_dict_det1 = {}
         birth_count_dict_det2 = {}
         assert(len(self.det_objects1) == len(self.det_objects2))
-        for seq_idx in range(len(self.det_objects1)):
+        for seq_idx in self.training_sequences:
             assert(len(self.det_objects1[seq_idx]) == len(self.det_objects2[seq_idx]))
 
             #contains ids of all ground truth tracks that have been previously associated with a detection
@@ -1375,7 +1370,7 @@ class MultiDetections:
             time instances
         """
         count = 0
-        for seq_idx in range(len(self.gt_objects)):
+        for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.gt_objects[seq_idx]) - 1 - time_unassociated):
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                     cur_gt_id = self.gt_objects[seq_idx][frame_idx][gt_idx].track_id
@@ -1469,7 +1464,7 @@ class MultiDetections:
         total_death_count = 0
         total_never_dead_count = 0
 
-        for seq_idx in range(len(self.gt_objects)):
+        for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.gt_objects[seq_idx])):
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                     if (not (seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id) in gt_track_ids):
@@ -1536,7 +1531,7 @@ class MultiDetections:
         (all_gt_ids_by_frame, all_assoc_gt_ids_by_frame) = self.get_gt_ids_by_frame()
 
 
-        for seq_idx in range(len(self.gt_objects)):
+        for seq_idx in self.training_sequences:
             total_gt_object_count += len(self.gt_objects[seq_idx][-1])
 
             for frame_idx in range(len(self.gt_objects[seq_idx]) - 1):
@@ -1579,7 +1574,7 @@ class MultiDetections:
             3 time instances from their last association)
         """
         count = 0
-        for seq_idx in range(len(self.gt_objects)):
+        for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.gt_objects[seq_idx]) - 1 - time_unassociated):
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
 
@@ -1631,10 +1626,13 @@ class MultiDetections:
         return (death_probs, death_counts, living_counts)
 
 class AllData:
-    def __init__(self, gt_objects, det_objects):
+    def __init__(self, gt_objects, det_objects, training_sequences):
         self.gt_objects = gt_objects
         self.det_objects = det_objects
         self.store_associations_in_gt()
+
+        # A list of sequence indices that will be used for training
+        self.training_sequences = training_sequences
 
     def store_associations_in_gt(self):
         """
@@ -1672,7 +1670,7 @@ class AllData:
         """
         total_gt_object_count = 0
         total_gt_det_associations = 0
-        for seq_idx in range(len(self.gt_objects)):
+        for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.gt_objects[seq_idx])):
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                     total_gt_object_count += 1
@@ -1714,7 +1712,7 @@ class AllData:
             max_clutter_count = 0
             #clutter_count_dict[5] = 18 means that 18 frames contain 5 clutter measurements
             clutter_count_dict = {}
-            for seq_idx in range(len(self.det_objects)):
+            for seq_idx in self.training_sequences:
                 for frame_idx in range(len(self.det_objects[seq_idx])):
                     total_frame_count += 1
                     cur_frame_clutter_count = 0
@@ -1751,7 +1749,7 @@ class AllData:
             max_clutter_count = 0
             #clutter_count_dict[5] = 18 means that 18 frames contain 5 clutter measurements
             clutter_count_dict = {}
-            for seq_idx in range(len(self.det_objects)):
+            for seq_idx in self.training_sequences:
                 for frame_idx in range(len(self.det_objects[seq_idx])):
                     total_frame_count += 1
                     cur_frame_clutter_count = 0
@@ -1860,7 +1858,7 @@ class AllData:
         max_birth_count = 0
         #birth_count_dict[5] = 18 means that 18 frames contain 5 birth measurements
         birth_count_dict = {}
-        for seq_idx in range(len(self.det_objects)):
+        for seq_idx in self.training_sequences:
             #contains ids of all ground truth tracks that have been previously associated with a detection
             previously_detected_gt_ids = []
             for frame_idx in range(len(self.det_objects[seq_idx])):
@@ -1899,7 +1897,7 @@ class AllData:
         """
         meas_errors = []
 
-        for seq_idx in range(len(self.gt_objects)):
+        for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.gt_objects[seq_idx])):
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                     if (self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection and \
@@ -1911,6 +1909,8 @@ class AllData:
                             meas_pos = np.array([self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.x, 
                                                  self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.y])
                             meas_errors.append(meas_pos - gt_pos)
+
+        assert(len(meas_errors) != 0), ("There are no associated detections in the score range [%f,%f)" % (min_score, max_score))
 
         meas_noise_cov = np.cov(np.asarray(meas_errors).T)
         meas_noise_mean = np.mean(np.asarray(meas_errors), 0)
@@ -1927,7 +1927,7 @@ class AllData:
         """
         num_measurements = 0
 
-        for seq_idx in range(len(self.det_objects)):
+        for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.det_objects[seq_idx])):
                 for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
                     if (self.det_objects[seq_idx][frame_idx][det_idx].score >= min_score and \
@@ -1973,7 +1973,7 @@ def doctor_clutter_probabilities(all_clutter_probabilities):
         # += used to append a list to a list!!
         all_clutter_probabilities[i] += [.0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20]
 
-def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doctor_clutter_probs=True, print_info=False,\
+def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", obj_class="car", doctor_clutter_probs=True, print_info=False,\
     include_ignored_gt = False, include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
@@ -2017,7 +2017,7 @@ def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doc
 
         measurementTargetSetsBySequence.append(cur_seq_meas_target_set)     
 ############################# now get params ###############################
-    all_data = AllData(gt_objects, det_objects)
+    all_data = AllData(gt_objects, det_objects, training_sequences)
     target_emission_probs = apply_function_on_intervals(score_intervals, all_data.get_prob_target_emission_by_score_range)
     clutter_probabilities = apply_function_on_intervals(score_intervals, all_data.get_clutter_probabilities_score_range)
     birth_probabilities = apply_function_on_intervals(score_intervals, all_data.get_birth_probabilities_score_range)
@@ -2053,7 +2053,7 @@ def get_meas_target_set(score_intervals, det_method="lsvm", obj_class="car", doc
 
 
 
-def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_score_intervals, \
+def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_score_intervals, lsvm_score_intervals, \
     obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = False, \
     include_dontcare_in_gt = False, include_ignored_detections = True):
     """
@@ -2064,13 +2064,13 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
 
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
-        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
+        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(training_sequences, regionlets_score_intervals, \
         "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
     (measurementTargetSetsBySequence_lsvm, target_emission_probs_lsvm, clutter_probabilities_lsvm, \
-        incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(lsvm_score_intervals, \
+        incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(training_sequences, lsvm_score_intervals, \
         "lsvm", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#3"
@@ -2098,7 +2098,7 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
     (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
         det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
-    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects, training_sequences)
     print "HELLO#7"
 
     (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
@@ -2113,7 +2113,7 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
 
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
-def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
+def get_meas_target_sets_regionlets_general_format(training_sequences, regionlets_score_intervals, \
     obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = False, \
     include_dontcare_in_gt = False, include_ignored_detections = True):
     """
@@ -2124,7 +2124,7 @@ def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
 
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
-        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
+        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(training_sequences, regionlets_score_intervals, \
         "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
@@ -2151,7 +2151,7 @@ def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
     (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
         det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
-    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects, training_sequences)
     print "HELLO#7"
 
     (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
@@ -2193,15 +2193,16 @@ if __name__ == "__main__":
 ############    score_intervals_lsvm = [0.0]
 ############    score_intervals_regionlets = [2.0]
 #####  score_intervals = [2.0]
-#####  get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True,\
+#####  get_meas_target_set(training_sequences, score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True,\
 #####                        print_info=True)
+#    training_sequences = [i for i in range(21)] #use all sequences for training
 
     #### Check death probabilities #######
     (gt_objects, lsvm_det_objects) = evaluate(min_score=0.0, det_method='lsvm', mail=mail, obj_class="car")
     (gt_objects, regionlets_det_objects) = evaluate(min_score=2.0, det_method='regionlets', mail=mail, obj_class="car")
-#    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
-    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects)
-#    multi_detections = MultiDetections(gt_objects, lsvm_det_objects, lsvm_det_objects)
+#    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects, training_sequences)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects, training_sequences)
+#    multi_detections = MultiDetections(gt_objects, lsvm_det_objects, lsvm_det_objects, training_sequences)
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
     print "death probabilities near border:", death_probs_near_border
@@ -2226,7 +2227,7 @@ if __name__ == "__main__":
 
     #obj_class == "car" or obj_class == "pedestrian"
     (gt_objects, det_objects) = evaluate(score_intervals[0], det_method,mail, obj_class="car")
-    all_data = AllData(gt_objects, det_objects)
+    all_data = AllData(gt_objects, det_objects, training_sequences)
 ################
 ################    print "clutter probabilities, not conditioned on measurement count:"
 ################    print get_clutter_probabilities(det_objects)
