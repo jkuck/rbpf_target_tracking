@@ -1270,7 +1270,7 @@ class MultiDetections:
                         assert(match_found == True)
 
     def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
-                                            allow_target_rebirth = False):
+                                            allow_target_rebirth = True):
         """
         Input:
         - min_score_det_1: detections must have score >= min_score_det_1 to be considered
