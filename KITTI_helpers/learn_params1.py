@@ -1269,13 +1269,19 @@ class MultiDetections:
 
                         assert(match_found == True)
 
-    def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2):
+    def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
+                                            allow_target_rebirth = False):
         """
         Input:
         - min_score_det_1: detections must have score >= min_score_det_1 to be considered
         - max_score_det_1: detections must have score < max_score_det_1 to be considered
         - min_score_det_2: detections must have score >= min_score_det_2 to be considered
         - max_score_det_2: detections must have score < max_score_det_2 to be considered
+        - allow_target_rebirth: boolean, specifies whether ground truth targets are allowed to die and be reborn.
+            In the training data, if ignored ground truth is included, I think there are only two cases where a target
+            dies and is reborn.  I'm not sure if this is an error, but it's small enough to not really make a difference
+            either way.  If ignored ground truths are not included, the number of ground truth objects that die and are 
+            reborn increases, but is still probably small enough to not make much of a difference (would be good to double check!)
 
         Output:
         - all_birth_probabilities: all_birth_probabilities[j] is 
@@ -1284,7 +1290,7 @@ class MultiDetections:
             where a "birth measurement" is a measurement of a ground truth target that has not been associated
             with a detection (of any score value in this AllData instance) on any previous time instance
         """
-        
+
         total_frame_count = 0
         #largest number of detection1 births in a single frame
         max_birth_count1 = 0
@@ -1300,6 +1306,19 @@ class MultiDetections:
             #contains ids of all ground truth tracks that have been previously associated with a detection
             previously_detected_gt_ids = []
             for frame_idx in range(len(self.det_objects1[seq_idx])):
+                if allow_target_rebirth and frame_idx != 0:
+                    this_frame_gt_ids = []
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                        this_frame_gt_ids.append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx-1])):
+                        cur_gt_id = self.gt_objects[seq_idx][frame_idx-1][gt_idx].track_id
+                        #removed detected gt objects that have died from previously_detected_gt_ids
+                        #to allow for rebirth
+                        if not(cur_gt_id in this_frame_gt_ids) and cur_gt_id in previously_detected_gt_ids:
+                            previously_detected_gt_ids.remove(cur_gt_id)
+                            assert(not cur_gt_id in previously_detected_gt_ids)
+
+
                 total_frame_count += 1
                 cur_frame_birth_count1 = 0
                 for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
@@ -1669,6 +1688,7 @@ class AllData:
         if debug:
             print '-'*10
             print "get_prob_target_emission_by_score_range debug info:"
+            print "min_score = ", min_score, " max_score = ", max_score
             print "total_gt_det_associations = ", total_gt_det_associations
             print "total_gt_object_count = ", total_gt_object_count
 
@@ -2041,15 +2061,18 @@ def get_meas_target_sets_lsvm_and_regionlets(regionlets_score_intervals, lsvm_sc
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
         and subtract .0000001 from element 0
     """
+
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
     (measurementTargetSetsBySequence_lsvm, target_emission_probs_lsvm, clutter_probabilities_lsvm, \
         incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(lsvm_score_intervals, \
-        "lsvm", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
+        "lsvm", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#3"
 
 
@@ -2098,10 +2121,12 @@ def get_meas_target_sets_regionlets_general_format(regionlets_score_intervals, \
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
         and subtract .0000001 from element 0
     """
+
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
 
@@ -2167,15 +2192,15 @@ if __name__ == "__main__":
 ###########    score_intervals_regionlets = [i for i in range(2, 20)]
 ############    score_intervals_lsvm = [0.0]
 ############    score_intervals_regionlets = [2.0]
-#####    score_intervals = [2.0]
-#####    get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True,\
+#####  score_intervals = [2.0]
+#####  get_meas_target_set(score_intervals, det_method = det_method, obj_class = "car", doctor_clutter_probs = True,\
 #####                        print_info=True)
 
     #### Check death probabilities #######
     (gt_objects, lsvm_det_objects) = evaluate(min_score=0.0, det_method='lsvm', mail=mail, obj_class="car")
     (gt_objects, regionlets_det_objects) = evaluate(min_score=2.0, det_method='regionlets', mail=mail, obj_class="car")
-    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
-#    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects)
+#    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects)
 #    multi_detections = MultiDetections(gt_objects, lsvm_det_objects, lsvm_det_objects)
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
