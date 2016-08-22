@@ -1,11 +1,11 @@
 import numpy as np
-from filterpy.kalman import KalmanFilter
-from filterpy.common import Q_discrete_white_noise
+#from filterpy.kalman import KalmanFilter
+#from filterpy.common import Q_discrete_white_noise
 from filterpy.monte_carlo import stratified_resample
 import filterpy
-import matplotlib.pyplot as plt
-import matplotlib.cm as cmx
-import matplotlib.colors as colors
+#import matplotlib.pyplot as plt
+#import matplotlib.cm as cmx
+#import matplotlib.colors as colors
 from scipy.stats import multivariate_normal
 from scipy.stats import gamma
 from scipy.special import gdtrc
@@ -17,8 +17,9 @@ import pickle
 import sys
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
+
+
 sys.path.insert(0, "./KITTI_helpers")
-from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
@@ -1550,7 +1551,7 @@ if __name__ == "__main__":
 	print sequence_name     
 	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
 	#for seq_idx in range(len(measurementTargetSetsBySequence)):
-	results_folder = './rbpf_KITTI_results_seq0_par_exec_test1/%s' % results_folder_name
+	results_folder = './rbpf_KITTI_results_seq0_par_exec_test/%s' % (results_folder_name)
 	t0 = time.time()
 	info_by_run = [] #list of info from each run
 	cur_run_info = None

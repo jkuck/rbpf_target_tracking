@@ -14,9 +14,9 @@ except:
     from collections import OrderedDict # only included from python 2.7 on
 
 import mailpy
-from learn_Q import run_EM_on_Q_multiple_targets
-from learn_Q import Target
-from learn_Q import default_time_step
+#from learn_Q import run_EM_on_Q_multiple_targets
+#from learn_Q import Target
+#from learn_Q import default_time_step
 import pickle
 
 LEARN_Q_FROM_ALL_GT = False
@@ -1048,8 +1048,8 @@ def evaluate(min_score, det_method,mail,obj_class = "car", include_ignored_gt = 
     # start evaluation and instanciated eval object
 
     if USE_PICKLED_DATA:
-        if not os.path.exists(PICKELD_DATA_DIRECTORY):
-            os.makedirs(PICKELD_DATA_DIRECTORY)
+#        if not os.path.exists(PICKELD_DATA_DIRECTORY):
+#            os.makedirs(PICKELD_DATA_DIRECTORY)
 
         data_filename = PICKELD_DATA_DIRECTORY + "/min_score_%f_det_method_%s_obj_class_%s_include_ignored_gt_%s_include_dontcare_gt_%s_include_ignored_det_%s.pickle" % \
                                                  (min_score, det_method, obj_class, include_ignored_gt, include_dontcare_in_gt, include_ignored_detections)
