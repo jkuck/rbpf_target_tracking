@@ -8,15 +8,15 @@ import sys,os,copy,math
 import os.path
 from munkres import Munkres
 from collections import defaultdict
-try:
-    from ordereddict import OrderedDict # can be installed using pip
-except:
-    from collections import OrderedDict # only included from python 2.7 on
+#try:
+#    from ordereddict import OrderedDict # can be installed using pip
+#except:
+#    from collections import OrderedDict # only included from python 2.7 on
 
 import mailpy
-from learn_Q import run_EM_on_Q_multiple_targets
-from learn_Q import Target
-from learn_Q import default_time_step
+#from learn_Q import run_EM_on_Q_multiple_targets
+#from learn_Q import Target
+#from learn_Q import default_time_step
 import pickle
 
 LEARN_Q_FROM_ALL_GT = False
