@@ -3,9 +3,9 @@ from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 from filterpy.monte_carlo import stratified_resample
 import filterpy
-import matplotlib.pyplot as plt
-import matplotlib.cm as cmx
-import matplotlib.colors as colors
+#import matplotlib.pyplot as plt
+#import matplotlib.cm as cmx
+#import matplotlib.colors as colors
 from scipy.stats import multivariate_normal
 from scipy.stats import gamma
 from scipy.special import gdtrc
@@ -33,7 +33,7 @@ import cProfile
 import time
 import os
 
-DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
+DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 
 #run on these sequences
 #SEQUENCES_TO_PROCESS = [0]
@@ -1504,7 +1504,7 @@ if __name__ == "__main__":
 
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
-	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
+	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
 	indicate_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, run_idx, seq_idx)
 	#if we haven't already run, run now:
 	if not os.path.isfile(indicate_run_complete_filename):
@@ -1519,7 +1519,7 @@ if __name__ == "__main__":
 
 		if sort_dets_on_intervals:
 			REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
-			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
+			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 	#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
 	#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 		else:
