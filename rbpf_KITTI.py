@@ -105,26 +105,26 @@ p_birth_likelihood = 1.0/float(1242*375)
 
 #Kalman filter defaults
 #Think about doing this in a more principled way!!!
-#P_default = np.array([[57.54277774, 0, 			 0, 0],
-# 					  [0,          10, 			 0, 0],
-# 					  [0, 			0, 17.86392672, 0],
-# 					  [0, 			0, 			 0, 3]])
-#
-P_default = np.array([[50.45678938, 0, 			 0, 0],
+P_default = np.array([[57.54277774, 0, 			 0, 0],
  					  [0,          10, 			 0, 0],
- 					  [0, 			0, 11.98731406, 0],
+ 					  [0, 			0, 17.86392672, 0],
  					  [0, 			0, 			 0, 3]])
 
+#P_default = np.array([[50.45678938, 0, 			 0, 0],
+# 					  [0,          10, 			 0, 0],
+# 					  [0, 			0, 11.98731406, 0],
+# 					  [0, 			0, 			 0, 3]])
+#
 
 #R_default = np.array([[ 57.54277774,  -0.29252698],
 # 					  [ -0.29252698,  17.86392672]])
 
 #regionlet detection with score > 2.0:
-#R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
-# 					  [ -3.60666228e-02,   1.64772050e+01]])
+R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+ 					  [ -3.60666228e-02,   1.64772050e+01]])
 #regionlet detection with score > 5.0:
-R_default = np.array([[ 50.45678938,   0.2390161 ],
- 					  [  0.2390161 ,  11.98731406]])
+#R_default = np.array([[ 50.45678938,   0.2390161 ],
+# 					  [  0.2390161 ,  11.98731406]])
 
 #learned only from GT locations associated with a regionlet detection with score > 2.0
 #Q_default = np.array([[ 175.93491484,  202.62608043,   -5.35815108,  -16.8599094 ],

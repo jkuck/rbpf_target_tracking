@@ -33,10 +33,13 @@ from jdk_helper_evaluate_results import eval_results
 import cProfile
 import time
 import os
+USE_CREATE_CHILD = False #speed up copying during resampling
+
+#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
+#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
 
 #run on these sequences
 SEQUENCES_TO_PROCESS = [0]
-#N_PARTICLES = 1 #number of particles used in the particle filter
 
 #Variables defined in main ARE global I think, not needed here (triple check...)
 #define global variables, which will be set in main
@@ -53,12 +56,12 @@ SEQUENCES_TO_PROCESS = [0]
 #eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
+
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
 
 USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check USE_CONSTANT_R
-USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially, then unassociated target deaths
 
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
@@ -108,12 +111,16 @@ P_TARGET_EMISSION = 0.813358070501
 #BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425, 0.2222222222222222, 0.35714285714285715, 0.2222222222222222, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 #NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035, 0.02247191011235955, 0.04081632653061224, 0.05, 0.05, 0.036585365853658534, 0.013888888888888888, 0.030303030303030304, 0.03389830508474576, 0.0, 0.0, 0.0, 0.05128205128205128, 0.0, 0.06451612903225806, 0.037037037037037035, 0.0, 0.0, 0.045454545454545456, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
+#from learn_params.py
+#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
 
 #BORDER_DEATH_PROBABILITIES = [-99, 0.3116591928251121, 0.5483870967741935, 0.5833333333333334, 0.8571428571428571, 1.0]
 #NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.001880843060242297, 0.026442307692307692, 0.04918032786885246, 0.06818181818181818, 0.008]
 
 #BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
 #NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+
 
 #BORDER_DEATH_PROBABILITIES = [-99, 0.8, 0.5, 0.3, 0.4, 0.8]
 #NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.07, 0.025, 0.03, 0.03, 0.006]
@@ -400,13 +407,25 @@ class TargetSet:
 		self.total_count = 0 #number of living targets plus number of dead targets
 		self.measurements = [] #generated measurements for a generative TargetSet 
 
+		self.parent_target_set = None 
+
+	def create_child(self):
+		child_target_set = TargetSet()
+		child_target_set.parent_target_set = self
+		child_target_set.total_count = self.total_count
+		child_target_set.living_count = self.living_count
+		child_target_set.all_targets = copy.deepcopy(self.living_targets)
+		child_target_set.living_targets = copy.deepcopy(self.living_targets)
+		return child_target_set
+
 	def create_new_target(self, measurement, width, height, cur_time):
 		new_target = Target(cur_time, self.total_count, np.squeeze(measurement), width, height)
 		self.living_targets.append(new_target)
 		self.all_targets.append(new_target)
 		self.living_count += 1
 		self.total_count += 1
-		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
+		if not USE_CREATE_CHILD:
+			assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
 
 
 	def kill_target(self, living_target_index):
@@ -422,7 +441,8 @@ class TargetSet:
 		del self.living_targets[living_target_index]
 
 		self.living_count -= 1
-		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
+		if not USE_CREATE_CHILD:
+			assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
 
 	def plot_all_target_locations(self, title):
 		fig = plt.figure()
@@ -447,31 +467,83 @@ class TargetSet:
 		ax.plot(time_stamps, locations,'o')
 		plt.title('Generated Measurements') 
 
+	def collect_ancestral_targets(self, descendant_target_ids=[]):
+		"""
+		Inputs:
+		- descendant_target_ids: a list of target ids that exist in the calling child's all_targets list
+			(or the all_targets list of a descendant of the calling child)
+
+		Outputs:
+		- every_target: every target in this TargetSet's all_targets list and
+		#every target in any of this TargetSet's ancestors' all_targets lists that does not
+		#appear in the all_targets list of a descendant
+		"""
+		every_target = []
+		found_target_ids = descendant_target_ids
+		for target in self.all_targets:
+			if(not target.id_ in found_target_ids):
+				every_target.append(target)
+				found_target_ids.append(target.id_)
+		if self.parent_target_set == None:
+			return every_target
+		else:
+			ancestral_targets = self.parent_target_set.collect_ancestral_targets(found_target_ids)
+
+		every_target = every_target + ancestral_targets # + operator used to concatenate lists!
+		return every_target
+
 
 	def write_targets_to_KITTI_format(self, num_frames, filename):
-		f = open(filename, "w")
-		for frame_idx in range(num_frames):
-			timestamp = frame_idx*default_time_step
-			for target in self.all_targets:
-				if timestamp in target.all_time_stamps:
-					x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
-					y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
-					width = target.all_states[target.all_time_stamps.index(timestamp)][1]
-					height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+		if USE_CREATE_CHILD:
+			every_target = self.collect_ancestral_targets()
+			f = open(filename, "w")
+			for frame_idx in range(num_frames):
+				timestamp = frame_idx*default_time_step
+				for target in every_target:
+					if timestamp in target.all_time_stamps:
+						x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
+						y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
+						width = target.all_states[target.all_time_stamps.index(timestamp)][1]
+						height = target.all_states[target.all_time_stamps.index(timestamp)][2]
 
-					left = x_pos - width/2.0
-					top = y_pos - height/2.0
-					right = x_pos + width/2.0
-					bottom = y_pos + height/2.0		 
-					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-						(frame_idx, target.id_, left, top, right, bottom))
-#					left = target.x[0][0] - target.width/2
-#					top = target.x[2][0] - target.height/2
-#					right = target.x[0][0] + target.width/2
-#					bottom = target.x[2][0] + target.height/2		 
-#					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-#						(frame_idx, target.id_, left, top, right, bottom))
-		f.close()
+						left = x_pos - width/2.0
+						top = y_pos - height/2.0
+						right = x_pos + width/2.0
+						bottom = y_pos + height/2.0		 
+						f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+							(frame_idx, target.id_, left, top, right, bottom))
+	#					left = target.x[0][0] - target.width/2
+	#					top = target.x[2][0] - target.height/2
+	#					right = target.x[0][0] + target.width/2
+	#					bottom = target.x[2][0] + target.height/2		 
+	#					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+	#						(frame_idx, target.id_, left, top, right, bottom))
+			f.close()
+
+		else:
+			f = open(filename, "w")
+			for frame_idx in range(num_frames):
+				timestamp = frame_idx*default_time_step
+				for target in self.all_targets:
+					if timestamp in target.all_time_stamps:
+						x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
+						y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
+						width = target.all_states[target.all_time_stamps.index(timestamp)][1]
+						height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+
+						left = x_pos - width/2.0
+						top = y_pos - height/2.0
+						right = x_pos + width/2.0
+						bottom = y_pos + height/2.0		 
+						f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+							(frame_idx, target.id_, left, top, right, bottom))
+	#					left = target.x[0][0] - target.width/2
+	#					top = target.x[2][0] - target.height/2
+	#					right = target.x[0][0] + target.width/2
+	#					bottom = target.x[2][0] + target.height/2		 
+	#					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+	#						(frame_idx, target.id_, left, top, right, bottom))
+			f.close()
 
 
 class Particle:
@@ -484,7 +556,9 @@ class Particle:
 		#cache for memoizing association likelihood computation
 		self.assoc_likelihood_cache = {}
 
-		self.id_ = id_
+		self.id_ = id_ #will be the same as the parent's id when copying in create_child
+
+		self.parent_id = -1
 
 		#for debugging
 		self.c_debug = -1
@@ -493,9 +567,11 @@ class Particle:
 		self.pi_clutter_debug = -1
 		self.pi_targets_debug = []
 
-	def child_copy(self, id_):
-		child_particle = Particle(id_)
+	def create_child(self):
+		child_particle = Particle(self.id_)
 		child_particle.importance_weight = self.importance_weight
+		child_particle.targets = self.targets.create_child()
+		return child_particle
 
 	def create_new_target(self, measurement, width, height, cur_time):
 		self.targets.create_new_target(measurement, width, height, cur_time)
@@ -1209,7 +1285,10 @@ def perform_resampling(particle_set):
 	new_particles = stratified_resample(weights)
 	new_particle_set = []
 	for index in new_particles:
-		new_particle_set.append(copy.deepcopy(particle_set[index]))
+		if USE_CREATE_CHILD:
+			new_particle_set.append(particle_set[index].create_child())
+		else:
+			new_particle_set.append(copy.deepcopy(particle_set[index]))
 	del particle_set[:]
 	for particle in new_particle_set:
 		particle.importance_weight = 1.0/N_PARTICLES
