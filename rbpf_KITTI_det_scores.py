@@ -18,7 +18,6 @@ import sys
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
-from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
@@ -38,8 +37,12 @@ USE_CREATE_CHILD = False #speed up copying during resampling
 #MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
 #MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
 
+DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
+
 #run on these sequences
-SEQUENCES_TO_PROCESS = [0]
+
+#SEQUENCES_TO_PROCESS = [0]
+SEQUENCES_TO_PROCESS = [i for i in range(21)]
 
 #Variables defined in main ARE global I think, not needed here (triple check...)
 #define global variables, which will be set in main
@@ -1527,8 +1530,8 @@ if __name__ == "__main__":
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=8:
-		print "Supply 7 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
+	if len(sys.argv)!=9:
+		print "Supply 8 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
 		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs"
 		print "received ", len(sys.argv), " arguments"
 		for i in range(len(sys.argv)):
@@ -1538,6 +1541,7 @@ if __name__ == "__main__":
 	N_PARTICLES = int(sys.argv[1])
 	run_idx = int(sys.argv[6]) #the index of this run
 	total_runs = int(sys.argv[7]) #the total number of runs, for checking whether all runs are finished and results should be evaluated
+	seq_idx = int(sys.argv[8]) #the index of the sequence to process
 	for i in range(2,6):
 		if(sys.argv[i] != 'True' and sys.argv[i] != 'False'):
 			print "Booleans must be supplied as 'True' or 'False' (without quotes)"
@@ -1549,6 +1553,7 @@ if __name__ == "__main__":
 	include_dontcare_in_gt = (sys.argv[3] == 'True')
 	use_regionlets_and_lsvm = (sys.argv[4] == 'True')
 	sort_dets_on_intervals = (sys.argv[5] == 'True')
+
 
 	if (not include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
 		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_with_score_intervals"
@@ -1577,63 +1582,96 @@ if __name__ == "__main__":
 		print "Unexpected combination of boolean arguments"
 		sys.exit(1);
 
-	#False doesn't really make sense because when actually running without ground truth information we don't know
-	#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
-	#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
-	#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
-	#If this occured, it would make sense to try excluding these detections.)
-	include_ignored_detections = True 
-
-	if sort_dets_on_intervals:
-		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
-		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-	else:
-		REGIONLETS_SCORE_INTERVALS = [2]
-		LSVM_SCORE_INTERVALS = [0]
-
-	#set global variables
-	#global SCORE_INTERVALS
-	#global TARGET_EMISSION_PROBS
-	#global CLUTTER_PROBABILITIES
-	#global BIRTH_PROBABILITIES
-	#global MEAS_NOISE_COVS
-	#global BORDER_DEATH_PROBABILITIES
-	#global NOT_BORDER_DEATH_PROBABILITIES
-
-	#use regionlets and lsvm detections
-	if use_regionlets_and_lsvm:
-		SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
-		(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-			MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_lsvm_and_regionlets(REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS, \
-		    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
-
-	#only use regionlets detections
-	else: 
-		SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
-		(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-			MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = get_meas_target_sets_regionlets_general_format(REGIONLETS_SCORE_INTERVALS, \
-		    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
-
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
-	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
-	n_frames         = []
-	sequence_name    = []
-	with open(filename_mapping, "r") as fh:
-	    for i,l in enumerate(fh):
-	        fields = l.split(" ")
-	        sequence_name.append("%04d" % int(fields[0]))
-	        n_frames.append(int(fields[3]) - int(fields[2]))
-	fh.close() 
-	print n_frames
-	print sequence_name     
-	assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-	#for seq_idx in range(len(measurementTargetSetsBySequence)):
-	results_folder = './rbpf_KITTI_results_seq0_par_exec_test1/%s' % results_folder_name
-	t0 = time.time()
-	info_by_run = [] #list of info from each run
-	cur_run_info = None
-	for seq_idx in SEQUENCES_TO_PROCESS:
+	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
+	indicate_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, run_idx, seq_idx)
+	#if we haven't already run, run now:
+	if not os.path.isfile(indicate_run_complete_filename):
+
+
+		#False doesn't really make sense because when actually running without ground truth information we don't know
+		#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+		#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+		#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+		#If this occured, it would make sense to try excluding these detections.)
+		include_ignored_detections = True 
+
+		if sort_dets_on_intervals:
+			REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
+	#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
+	#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+		else:
+			REGIONLETS_SCORE_INTERVALS = [2]
+			LSVM_SCORE_INTERVALS = [0]
+
+		#set global variables
+		#global SCORE_INTERVALS
+		#global TARGET_EMISSION_PROBS
+		#global CLUTTER_PROBABILITIES
+		#global BIRTH_PROBABILITIES
+		#global MEAS_NOISE_COVS
+		#global BORDER_DEATH_PROBABILITIES
+		#global NOT_BORDER_DEATH_PROBABILITIES
+
+
+		training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
+	#	training_sequences = [0]
+
+		#use regionlets and lsvm detections
+		if use_regionlets_and_lsvm:
+			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+					LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, \
+					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+					include_ignored_detections = include_ignored_detections)
+
+		#only use regionlets detections
+		else: 
+			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+				get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+				obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, \
+				include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
+
+	#	############DEBUG
+	#	
+	#	print "target emission probs: "
+	#	print TARGET_EMISSION_PROBS
+	#	print "cluter probs: "
+	#	print CLUTTER_PROBABILITIES
+	#	print "birth probs: "
+	#	print BIRTH_PROBABILITIES
+	#	print "Meas noise covs:"
+	#	print MEAS_NOISE_COVS
+	#	print "BORDER_DEATH_PROBABILITIES:"
+	#	print BORDER_DEATH_PROBABILITIES
+	#	print "NOT_BORDER_DEATH_PROBABILITIES:"
+	#	print NOT_BORDER_DEATH_PROBABILITIES
+	#	sleep(5)
+	#	##########DONE DEBUG
+
+
+		filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
+		n_frames         = []
+		sequence_name    = []
+		with open(filename_mapping, "r") as fh:
+		    for i,l in enumerate(fh):
+		        fields = l.split(" ")
+		        sequence_name.append("%04d" % int(fields[0]))
+		        n_frames.append(int(fields[3]) - int(fields[2]))
+		fh.close() 
+		print n_frames
+		print sequence_name     
+		assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
+		t0 = time.time()
+		info_by_run = [] #list of info from each run
+		cur_run_info = None
+	################	for seq_idx in SEQUENCES_TO_PROCESS:
 		filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
 		if not os.path.exists(os.path.dirname(filename)):
 			try:
@@ -1659,26 +1697,33 @@ if __name__ == "__main__":
 				cur_run_info[info_idx] += cur_seq_info[info_idx]
 
 		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
-	info_by_run.append(cur_run_info)
 
-	t1 = time.time()
+	################END	for seq_idx in SEQUENCES_TO_PROCESS:
+		
+		info_by_run.append(cur_run_info)
 
-	indicate_run_complete_filename = '%s/results_by_run/run_%d/done.txt' % (results_folder, run_idx)
-	run_complete_f = open(indicate_run_complete_filename, 'w')
-	run_complete_f.write("This run is finished (and this file indicates the fact)\n")
-	run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
-	run_complete_f.write("This run took %f seconds\n" % (t1-t0))
-	run_complete_f.close()
+		t1 = time.time()
 
-	if(run_idx == total_runs): #one run is responsible for evaluating all the results
+		run_complete_f = open(indicate_run_complete_filename, 'w')
+		run_complete_f.write("This run is finished (and this file indicates the fact)\n")
+		run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
+		run_complete_f.write("This run took %f seconds\n" % (t1-t0))
+		run_complete_f.close()
+
+
+
+
+
+	if(run_idx == total_runs and seq_idx == 20): #one run is responsible for evaluating all the results
 		#check if all the runs are complete
 		all_runs_complete = False
 		while(not all_runs_complete):
 			all_runs_complete = True
 			for cur_run_idx in range(1, total_runs + 1):
-				cur_run_complete_filename = '%s/results_by_run/run_%d/done.txt' % (results_folder, cur_run_idx)
-				if (not os.path.isfile(cur_run_complete_filename)):
-					all_runs_complete = False
+				for cur_seq_idx in SEQUENCES_TO_PROCESS:
+					cur_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, cur_run_idx, cur_seq_idx)
+					if (not os.path.isfile(cur_run_complete_filename)):
+						all_runs_complete = False
 			time.sleep(1) #wait and check again
 
 		#evaluate the results when all runs are complete
