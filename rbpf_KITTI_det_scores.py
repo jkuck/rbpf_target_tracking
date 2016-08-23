@@ -1450,18 +1450,26 @@ if __name__ == "__main__":
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=9:
-		print "Supply 8 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
-		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs"
+	if len(sys.argv)!=10:
+		print "Supply 9 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
+		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs, seq_idx, peripheral"
 		print "received ", len(sys.argv), " arguments"
 		for i in range(len(sys.argv)):
 			print sys.argv[i]
-
 		sys.exit(1);
+
 	N_PARTICLES = int(sys.argv[1])
 	run_idx = int(sys.argv[6]) #the index of this run
 	total_runs = int(sys.argv[7]) #the total number of runs, for checking whether all runs are finished and results should be evaluated
 	seq_idx = int(sys.argv[8]) #the index of the sequence to process
+	peripheral = sys.argv[9] #should we run setup, evaluation, or an actual run?
+
+	if not peripheral in ['setup', 'evaluate', 'run']:
+		print "unexpected peripheral argument"
+		sys.exit(1);
+	else:
+		print "peripheral = ", peripheral
+
 	for i in range(2,6):
 		if(sys.argv[i] != 'True' and sys.argv[i] != 'False'):
 			print "Booleans must be supplied as 'True' or 'False' (without quotes)"
@@ -1504,170 +1512,199 @@ if __name__ == "__main__":
 
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
-	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
-	indicate_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, run_idx, seq_idx)
-	#if we haven't already run, run now:
-	if not os.path.isfile(indicate_run_complete_filename):
+	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup2/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
 
+	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
+	n_frames         = []
+	sequence_name    = []
+	with open(filename_mapping, "r") as fh:
+	    for i,l in enumerate(fh):
+	        fields = l.split(" ")
+	        sequence_name.append("%04d" % int(fields[0]))
+	        n_frames.append(int(fields[3]) - int(fields[2]))
+	fh.close() 
+	print n_frames
+	print sequence_name     
+	assert(len(n_frames) == len(sequence_name))
 
-		#False doesn't really make sense because when actually running without ground truth information we don't know
-		#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
-		#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
-		#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
-		#If this occured, it would make sense to try excluding these detections.)
-		include_ignored_detections = True 
+	if peripheral == 'setup': #create directories
+		print 'begin setup'
+		for cur_run_idx in range(1, total_runs + 1):
+			for cur_seq_idx in SEQUENCES_TO_PROCESS:
+				cur_dir = '%s/results_by_run/run_%d/%s.txt' % (results_folder, cur_run_idx, sequence_name[cur_seq_idx])
+				if not os.path.exists(os.path.dirname(cur_dir)):
+					try:
+						os.makedirs(os.path.dirname(cur_dir))
+					except OSError as exc: # Guard against race condition
+						if exc.errno != errno.EEXIST:
+							raise
+		print 'end setup'
+		sys.exit(0);
 
-		if sort_dets_on_intervals:
-			REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
-			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
-	#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
-	#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+	elif peripheral == 'evaluate': #evaluate results from all runs/sequences
+		print 'begin evaluate'
+		#make sure all the runs are complete
+		all_runs_complete = True
+		for cur_run_idx in range(1, total_runs + 1):
+			for cur_seq_idx in SEQUENCES_TO_PROCESS:
+				cur_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, cur_run_idx, cur_seq_idx)
+				if (not os.path.isfile(cur_run_complete_filename)):
+					all_runs_complete = False
+		if all_runs_complete:
+			#evaluate the results when all runs are complete
+			eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+			stdout = sys.stdout
+			sys.stdout = open(eval_metrics_file, 'w')
+
+			runs_completed = eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
+
+			print "Number of runs completed = ", runs_completed
+			print "Description of run: ", DESCRIPTION_OF_RUN
+			print "Cached likelihoods = ", CACHED_LIKELIHOODS
+			print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+			#print "RBPF runtime (sum of all runs) = ", t1-t0
+			print "USE_CONSTANT_R = ", USE_CONSTANT_R
+			print "number of particles = ", N_PARTICLES
+			print "score intervals: ", SCORE_INTERVALS
+			print "run on sequences: ", SEQUENCES_TO_PROCESS
+			print "number of particles = ", N_PARTICLES
+
+			sys.stdout.close()
+			sys.stdout = stdout
+
+			print "Printing works normally again!"
+
 		else:
-			REGIONLETS_SCORE_INTERVALS = [2]
-			LSVM_SCORE_INTERVALS = [0]
+			#evaluate the results when all runs are complete
+			eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+			stdout = sys.stdout
+			sys.stdout = open(eval_metrics_file, 'w')
 
-		#set global variables
-		#global SCORE_INTERVALS
-		#global TARGET_EMISSION_PROBS
-		#global CLUTTER_PROBABILITIES
-		#global BIRTH_PROBABILITIES
-		#global MEAS_NOISE_COVS
-		#global BORDER_DEATH_PROBABILITIES
-		#global NOT_BORDER_DEATH_PROBABILITIES
+			print "Error: all runs not complete"
 
+			sys.stdout.close()
+			sys.stdout = stdout
 
-		training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
-	#	training_sequences = [0]
-
-		#use regionlets and lsvm detections
-		if use_regionlets_and_lsvm:
-			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
-			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-					get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-					LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, \
-					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
-					include_ignored_detections = include_ignored_detections)
-
-		#only use regionlets detections
-		else: 
-			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
-			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-				get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-				obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, \
-				include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
-
-	#	############DEBUG
-	#	
-	#	print "target emission probs: "
-	#	print TARGET_EMISSION_PROBS
-	#	print "cluter probs: "
-	#	print CLUTTER_PROBABILITIES
-	#	print "birth probs: "
-	#	print BIRTH_PROBABILITIES
-	#	print "Meas noise covs:"
-	#	print MEAS_NOISE_COVS
-	#	print "BORDER_DEATH_PROBABILITIES:"
-	#	print BORDER_DEATH_PROBABILITIES
-	#	print "NOT_BORDER_DEATH_PROBABILITIES:"
-	#	print NOT_BORDER_DEATH_PROBABILITIES
-	#	sleep(5)
-	#	##########DONE DEBUG
+			print "Printing works normally again!"
+		print 'end evaluate'
+		sys.exit(0);
 
 
-		filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
-		n_frames         = []
-		sequence_name    = []
-		with open(filename_mapping, "r") as fh:
-		    for i,l in enumerate(fh):
-		        fields = l.split(" ")
-		        sequence_name.append("%04d" % int(fields[0]))
-		        n_frames.append(int(fields[3]) - int(fields[2]))
-		fh.close() 
-		print n_frames
-		print sequence_name     
-		assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-		t0 = time.time()
-		info_by_run = [] #list of info from each run
-		cur_run_info = None
-	################	for seq_idx in SEQUENCES_TO_PROCESS:
-		filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
-		if not os.path.exists(os.path.dirname(filename)):
-			try:
-				os.makedirs(os.path.dirname(filename))
-			except OSError as exc: # Guard against race condition
-				if exc.errno != errno.EEXIST:
-					raise
-
-		print "Processing sequence: ", seq_idx
-		tA = time.time()
-		(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
-		tB = time.time()
-		this_seq_run_time = tB - tA
-		cur_seq_info.append(this_seq_run_time)
-		if cur_run_info == None:
-			cur_run_info = cur_seq_info
-		else:
-			assert(len(cur_run_info) == len(cur_seq_info))
-			for info_idx in len(cur_run_info):
-				#assuming for now info can be summed over each sequence in a run!
-				#works for runtime and number of times resampling is performed
-				cur_run_info[info_idx] += cur_seq_info[info_idx]
-
-		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
-
-	################END	for seq_idx in SEQUENCES_TO_PROCESS:
-		
-		info_by_run.append(cur_run_info)
-
-		t1 = time.time()
-
-		run_complete_f = open(indicate_run_complete_filename, 'w')
-		run_complete_f.write("This run is finished (and this file indicates the fact)\n")
-		run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
-		run_complete_f.write("This run took %f seconds\n" % (t1-t0))
-		run_complete_f.close()
+	else: # peripheral == 'run'
+		print 'begin run'
+		indicate_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, run_idx, seq_idx)
+		#if we haven't already run, run now:
+		if not os.path.isfile(indicate_run_complete_filename):
 
 
+			#False doesn't really make sense because when actually running without ground truth information we don't know
+			#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+			#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+			#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+			#If this occured, it would make sense to try excluding these detections.)
+			include_ignored_detections = True 
+
+			if sort_dets_on_intervals:
+				REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+				LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+		#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
+		#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+			else:
+				REGIONLETS_SCORE_INTERVALS = [2]
+				LSVM_SCORE_INTERVALS = [0]
+
+			#set global variables
+			#global SCORE_INTERVALS
+			#global TARGET_EMISSION_PROBS
+			#global CLUTTER_PROBABILITIES
+			#global BIRTH_PROBABILITIES
+			#global MEAS_NOISE_COVS
+			#global BORDER_DEATH_PROBABILITIES
+			#global NOT_BORDER_DEATH_PROBABILITIES
+
+
+			training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
+		#	training_sequences = [0]
+
+			#use regionlets and lsvm detections
+			if use_regionlets_and_lsvm:
+				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, \
+						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+						include_ignored_detections = include_ignored_detections)
+
+			#only use regionlets detections
+			else: 
+				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+					obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, \
+					include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
+
+			assert(len(n_frames) == len(measurementTargetSetsBySequence))
+		#	############DEBUG
+		#	
+		#	print "target emission probs: "
+		#	print TARGET_EMISSION_PROBS
+		#	print "cluter probs: "
+		#	print CLUTTER_PROBABILITIES
+		#	print "birth probs: "
+		#	print BIRTH_PROBABILITIES
+		#	print "Meas noise covs:"
+		#	print MEAS_NOISE_COVS
+		#	print "BORDER_DEATH_PROBABILITIES:"
+		#	print BORDER_DEATH_PROBABILITIES
+		#	print "NOT_BORDER_DEATH_PROBABILITIES:"
+		#	print NOT_BORDER_DEATH_PROBABILITIES
+		#	sleep(5)
+		#	##########DONE DEBUG
+
+			t0 = time.time()
+			info_by_run = [] #list of info from each run
+			cur_run_info = None
+		################	for seq_idx in SEQUENCES_TO_PROCESS:
+			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+
+			print "Processing sequence: ", seq_idx
+			tA = time.time()
+			(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+			tB = time.time()
+			this_seq_run_time = tB - tA
+			cur_seq_info.append(this_seq_run_time)
+			if cur_run_info == None:
+				cur_run_info = cur_seq_info
+			else:
+				assert(len(cur_run_info) == len(cur_seq_info))
+				for info_idx in len(cur_run_info):
+					#assuming for now info can be summed over each sequence in a run!
+					#works for runtime and number of times resampling is performed
+					cur_run_info[info_idx] += cur_seq_info[info_idx]
+
+			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+
+		################END	for seq_idx in SEQUENCES_TO_PROCESS:
+			
+			info_by_run.append(cur_run_info)
+
+			t1 = time.time()
+
+			run_complete_f = open(indicate_run_complete_filename, 'w')
+			run_complete_f.write("This run is finished (and this file indicates the fact)\n")
+			run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
+			run_complete_f.write("This run took %f seconds\n" % (t1-t0))
+			run_complete_f.close()
+
+		print 'end run'
+		sys.exit(0);
 
 
 
-	if(run_idx == total_runs and seq_idx == 19): #one run is responsible for evaluating all the results
-		#check if all the runs are complete
-		all_runs_complete = False
-		while(not all_runs_complete):
-			all_runs_complete = True
-			for cur_run_idx in range(1, total_runs + 1):
-				for cur_seq_idx in SEQUENCES_TO_PROCESS:
-					cur_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, cur_run_idx, cur_seq_idx)
-					if (not os.path.isfile(cur_run_complete_filename)):
-						all_runs_complete = False
-			time.sleep(1) #wait and check again
 
-		#evaluate the results when all runs are complete
-		eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
-		stdout = sys.stdout
-		sys.stdout = open(eval_metrics_file, 'w')
-
-		runs_completed = eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
-
-		print "Number of runs completed = ", runs_completed
-		print "Description of run: ", DESCRIPTION_OF_RUN
-		print "Cached likelihoods = ", CACHED_LIKELIHOODS
-		print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
-		#print "RBPF runtime (sum of all runs) = ", t1-t0
-		print "USE_CONSTANT_R = ", USE_CONSTANT_R
-		print "number of particles = ", N_PARTICLES
-		print "score intervals: ", SCORE_INTERVALS
-		print "run on sequences: ", SEQUENCES_TO_PROCESS
-		print "number of particles = ", N_PARTICLES
-
-		sys.stdout.close()
-		sys.stdout = stdout
-
-		print "Printing works normally again!"
 
 
 
