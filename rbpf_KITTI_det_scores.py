@@ -1634,7 +1634,7 @@ if __name__ == "__main__":
 
 
 
-	if(run_idx == total_runs and seq_idx == 19): #one run is responsible for evaluating all the results
+	if(run_idx == total_runs and seq_idx == 20): #one run is responsible for evaluating all the results
 		#check if all the runs are complete
 		all_runs_complete = False
 		while(not all_runs_complete):
