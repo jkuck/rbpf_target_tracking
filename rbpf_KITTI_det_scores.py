@@ -72,7 +72,7 @@ USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check U
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
@@ -145,22 +145,22 @@ p_birth_likelihood = 1.0/float(1242*375)
 
 #Kalman filter defaults
 #Think about doing this in a more principled way!!!
-P_default = np.array([[57.54277774, 0, 			 0, 0],
- 					  [0,          10, 			 0, 0],
- 					  [0, 			0, 17.86392672, 0],
- 					  [0, 			0, 			 0, 3]])
-#P_default = np.array([[40.64558317, 0, 			 0, 0],
+#P_default = np.array([[57.54277774, 0, 			 0, 0],
 # 					  [0,          10, 			 0, 0],
-# 					  [0, 			0, 5.56278505, 0],
+# 					  [0, 			0, 17.86392672, 0],
 # 					  [0, 			0, 			 0, 3]])
+P_default = np.array([[40.64558317, 0, 			 0, 0],
+ 					  [0,          10, 			 0, 0],
+ 					  [0, 			0, 5.56278505, 0],
+ 					  [0, 			0, 			 0, 3]])
 
 #regionlet detection with score > 2.0:
 #from learn_params
-R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
- 					  [ -3.60666228e-02,   1.64772050e+01]])
+#R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
+# 					  [ -3.60666228e-02,   1.64772050e+01]])
 #from learn_params1, not counting 'ignored' ground truth
-#R_default = np.array([[ 40.64558317,   0.14036472],
-# 					  [  0.14036472,   5.56278505]])
+R_default = np.array([[ 40.64558317,   0.14036472],
+ 					  [  0.14036472,   5.56278505]])
 
 
 #learned from all GT
