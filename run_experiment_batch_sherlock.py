@@ -2,15 +2,15 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=3
-SEQUENCES_TO_PROCESS = [i for i in range(21)]
-#SEQUENCES_TO_PROCESS = [11]
+NUM_RUNS=1
+#SEQUENCES_TO_PROCESS = [i for i in range(21)]
+SEQUENCES_TO_PROCESS = [11]
 #SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
-CUR_EXPERIMENT_BATCH_NAME = 'old_death_probs_constant_R_test'
-RUN_EVALUATION = False
+CUR_EXPERIMENT_BATCH_NAME = 'view_new_death_probs'
+RUN_EVALUATION = True
 
 
 
@@ -130,12 +130,12 @@ if __name__ == "__main__":
 #								include_ignored_gt=False, include_dontcare_in_gt=False, 
 #								use_regionlets_and_lsvm=True, sort_dets_on_intervals=False)
 #
-	#regionlets_only_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
-
+#	#regionlets_only_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+#
 #	#regionlets_only_no_score_intervals
 #	for num_particles in NUM_PARTICLES_TO_TEST:
 #		submit_single_experiment(num_particles=num_particles, 
@@ -154,9 +154,9 @@ if __name__ == "__main__":
 #								include_ignored_gt=False, include_dontcare_in_gt=True, 
 #								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
 #
-#	#lsvm_and_regionlets_include_ignored_and_dontcare_in_gt
-#	for num_particles in NUM_PARTICLES_TO_TEST:
-#		submit_single_experiment(num_particles=num_particles, 
-#								include_ignored_gt=True, include_dontcare_in_gt=True, 
-#								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
-#
+	#lsvm_and_regionlets_include_ignored_and_dontcare_in_gt
+	for num_particles in NUM_PARTICLES_TO_TEST:
+		submit_single_experiment(num_particles=num_particles, 
+								include_ignored_gt=True, include_dontcare_in_gt=True, 
+								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
+

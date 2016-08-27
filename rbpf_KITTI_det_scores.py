@@ -29,8 +29,8 @@ from jdk_helper_evaluate_results import eval_results
 #from proposal2_helper import memoized_birth_clutter_prior
 #from proposal2_helper import sample_birth_clutter_counts
 #from proposal2_helper import sample_target_deaths_proposal2
-random.seed(5)
-np.random.seed(seed=5)
+#random.seed(5)
+#np.random.seed(seed=5)
 
 import cProfile
 import time
@@ -1771,6 +1771,11 @@ if __name__ == "__main__":
 					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
 					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
 					include_ignored_detections = include_ignored_detections)
+
+			print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
+			print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
+
+			sleep(5)
 
 			BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
 			NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]

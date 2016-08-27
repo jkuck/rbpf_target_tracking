@@ -2181,22 +2181,22 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     print "HELLO#6"
 
 ########### CLEAN THIS UP BEGIN
-    lsvm_score_intervals = [2] #arbitrary!
-    (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
-        det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
-        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
-    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects, training_sequences)
+#    lsvm_score_intervals = [2] #arbitrary!
+#    (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
+#        det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+#        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects, training_sequences)
     print "HELLO#7"
 
-    (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
-        lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
+    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
+        regionlets_score_intervals, multi_detections.get_birth_probabilities_score_range)
 
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
     if(doctor_birth_probs):
         doctor_birth_probabilities(birth_probabilities_regionlets)
-        doctor_birth_probabilities(birth_probabilities_lsvm)
+        doctor_birth_probabilities(birth_probabilities_lsvm_nonsense)
 
 ########## CLEAN THIS UP END
     birth_probabilities = [birth_probabilities_regionlets]

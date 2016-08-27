@@ -11,7 +11,7 @@ else
 fi
 #time you think you need; default is one hour
 #in minutes in this case, hh:mm:ss
-#SBATCH --time=$TIME
+#SBATCH --time=$3:00
 #################
 #quality of service; think of it as job priority
 #SBATCH --qos=normal
