@@ -1973,12 +1973,16 @@ def doctor_clutter_probabilities(all_clutter_probabilities):
         # += used to append a list to a list!!
         all_clutter_probabilities[i] += [.0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20, .0000001/20]
 
-def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", obj_class="car", doctor_clutter_probs=True, print_info=False,\
-    include_ignored_gt = False, include_dontcare_in_gt = False, include_ignored_detections = True):
+
+def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", obj_class="car", doctor_clutter_probs=True, doctor_birth_probs=True,\
+    print_info=False, include_ignored_gt = False, include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
     - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
         and subtract .0000001 from element 0
+    - doctor_birth_probs: if True then if any birth probability is 0 subtract .0000001 from element 0
+        of its score interval's birth probability list and replacing zero elements with .0000001/(number of
+        zero elements in the score interval's birth probability list)
     """
     mail = mailpy.Mail("")
 
@@ -2025,6 +2029,17 @@ def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", 
     if(doctor_clutter_probs):
         doctor_clutter_probabilities(clutter_probabilities)
 
+    if(doctor_birth_probs):
+        for cur_score_int_birth_probs in birth_probabilities:
+            assert(abs(sum(cur_score_int_birth_probs)-1.0) < .0000000001)
+            num_zero_probs = cur_score_int_birth_probs.count(0)
+            if num_zero_probs != 0:
+                assert(cur_score_int_birth_probs[0] > .00001)
+                cur_score_int_birth_probs[0] -= .0000001
+                for prob_idx in range(len(cur_score_int_birth_probs)):
+                    if cur_score_int_birth_probs[prob_idx] == 0:
+                        cur_score_int_birth_probs[prob_idx] = .0000001/float(num_zero_probs)
+
     meas_noise_covs = []
     for i in range(len(meas_noise_cov_and_mean)):
         meas_noise_covs.append(meas_noise_cov_and_mean[i][0])
@@ -2051,10 +2066,25 @@ def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", 
 #    f.close()  
 
 
+def doctor_birth_probabilities(birth_probabilities):
+    """
+    If any birth probability is 0 subtract .0000001 from element 0
+    of its score interval's birth probability list and replace zero elements with .0000001/(number of
+    zero elements in the score interval's birth probability list
+    """
+    for cur_score_int_birth_probs in birth_probabilities:
+        assert(abs(sum(cur_score_int_birth_probs)-1.0) < .0000000001)
+        num_zero_probs = cur_score_int_birth_probs.count(0)
+        if num_zero_probs != 0:
+            assert(cur_score_int_birth_probs[0] > .00001)
+            cur_score_int_birth_probs[0] -= .0000001
+            for prob_idx in range(len(cur_score_int_birth_probs)):
+                if cur_score_int_birth_probs[prob_idx] == 0:
+                    cur_score_int_birth_probs[prob_idx] = .0000001/float(num_zero_probs)
 
 
 def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_score_intervals, lsvm_score_intervals, \
-    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = False, \
+    obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
     include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
@@ -2065,13 +2095,13 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(training_sequences, regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, doctor_birth_probs=doctor_birth_probs, include_ignored_gt=include_ignored_gt, \
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
     (measurementTargetSetsBySequence_lsvm, target_emission_probs_lsvm, clutter_probabilities_lsvm, \
         incorrect_birth_probabilities_lsvm, meas_noise_covs_lsvm) = get_meas_target_set(training_sequences, lsvm_score_intervals, \
-        "lsvm", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        "lsvm", obj_class, doctor_clutter_probs=doctor_clutter_probs, doctor_birth_probs=doctor_birth_probs, include_ignored_gt=include_ignored_gt, \
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#3"
 
@@ -2104,6 +2134,10 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
         lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
 
+    if(doctor_birth_probs):
+        doctor_birth_probabilities(birth_probabilities_regionlets)
+        doctor_birth_probabilities(birth_probabilities_lsvm)
+
     birth_probabilities = [birth_probabilities_regionlets, birth_probabilities_lsvm]
     print "HELLO#8"
 
@@ -2114,7 +2148,7 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
 def get_meas_target_sets_regionlets_general_format(training_sequences, regionlets_score_intervals, \
-    obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = False, \
+    obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
     include_dontcare_in_gt = False, include_ignored_detections = True):
     """
     Input:
@@ -2125,7 +2159,7 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     print "HELLO#1"
     (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
         incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(training_sequences, regionlets_score_intervals, \
-        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, include_ignored_gt=include_ignored_gt, \
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, doctor_birth_probs=doctor_birth_probs, include_ignored_gt=include_ignored_gt, \
         include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
     print "HELLO#2"
 
@@ -2159,6 +2193,10 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
 
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+
+    if(doctor_birth_probs):
+        doctor_birth_probabilities(birth_probabilities_regionlets)
+        doctor_birth_probabilities(birth_probabilities_lsvm)
 
 ########## CLEAN THIS UP END
     birth_probabilities = [birth_probabilities_regionlets]

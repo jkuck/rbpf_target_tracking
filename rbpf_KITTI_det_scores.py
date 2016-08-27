@@ -15,6 +15,7 @@ import math
 from numpy.linalg import inv
 import pickle
 import sys
+import resource
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
@@ -28,21 +29,23 @@ from jdk_helper_evaluate_results import eval_results
 #from proposal2_helper import memoized_birth_clutter_prior
 #from proposal2_helper import sample_birth_clutter_counts
 #from proposal2_helper import sample_target_deaths_proposal2
+random.seed(5)
+np.random.seed(seed=5)
 
 import cProfile
 import time
 import os
-USE_CREATE_CHILD = False #speed up copying during resampling
+USE_CREATE_CHILD = True #speed up copying during resampling
 
-#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
-#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
+from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
+from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
+from run_experiment_batch import SEQUENCES_TO_PROCESS
 
-DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
-
-#run on these sequences
-
-#SEQUENCES_TO_PROCESS = [0]
-SEQUENCES_TO_PROCESS = [i for i in range(21)]
+######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
+######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
+#######run on these sequences
+#######SEQUENCES_TO_PROCESS = [0]
+######SEQUENCES_TO_PROCESS = [i for i in range(21)]
 
 #Variables defined in main ARE global I think, not needed here (triple check...)
 #define global variables, which will be set in main
@@ -215,14 +218,15 @@ def get_cmap(N):
 
 class Target:
 	def __init__(self, cur_time, id_, measurement = None, width=-1, height=-1):
-		if measurement is None: #for data generation
-			position = np.random.uniform(min_pos,max_pos)
-			velocity = np.random.uniform(min_vel,max_vel)
-			self.x = np.array([[position], [velocity]])
-			self.P = P_default
-		else:
-			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0]])
-			self.P = P_default
+#		if measurement is None: #for data generation
+#			position = np.random.uniform(min_pos,max_pos)
+#			velocity = np.random.uniform(min_vel,max_vel)
+#			self.x = np.array([[position], [velocity]])
+#			self.P = P_default
+#		else:
+		assert(measurement != None)
+		self.x = np.array([[measurement[0]], [0], [measurement[1]], [0]])
+		self.P = P_default
 
 		self.width = width
 		self.height = height
@@ -418,7 +422,8 @@ class TargetSet:
 		child_target_set.total_count = self.total_count
 		child_target_set.living_count = self.living_count
 		child_target_set.all_targets = copy.deepcopy(self.living_targets)
-		child_target_set.living_targets = copy.deepcopy(self.living_targets)
+		for target in child_target_set.all_targets:
+			child_target_set.living_targets.append(target)
 		return child_target_set
 
 	def create_new_target(self, measurement, width, height, cur_time):
@@ -1008,7 +1013,15 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 						  
 
 		total_prior = death_prior * assoc_prior
-		assert(total_prior != 0.0), (death_prior, assoc_prior)
+
+		if total_prior == 0:
+			for i in range(len(score_intervals)):
+				print "for score interval beginning at", score_intervals[i]
+				print "target emmission prob =", target_emission_probs[i]**(meas_counts_by_score[i])
+				print "birth prior=", birth_count_priors[i][birth_counts_by_score[i]] 
+				print "clutter prior=", clutter_count_priors[i][clutter_counts_by_score[i]] 
+
+		assert(total_prior != 0.0), (death_prior, assoc_prior, target_emission_probs, birth_count_priors, clutter_count_priors)
 #		return total_prior
 		return assoc_prior
 
@@ -1279,6 +1292,7 @@ def normalize_importance_weights(particle_set):
 
 
 def perform_resampling(particle_set):
+	print "memory used before resampling: %d" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 	assert(len(particle_set) == N_PARTICLES)
 	weights = []
 	for particle in particle_set:
@@ -1303,6 +1317,7 @@ def perform_resampling(particle_set):
 		weights.append(particle.importance_weight)
 		assert(particle.importance_weight == 1.0/N_PARTICLES)
 	assert(abs(sum(weights) - 1.0) < .01), sum(weights)
+	print "memory used after resampling: %d" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 	#done testing
 
 def display_target_counts(particle_set, cur_time):
@@ -1592,7 +1607,8 @@ if __name__ == "__main__":
 
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
-	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup2/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
+#	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup3/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
+	results_folder = '%s/%s/%s' % (DIRECTORY_OF_ALL_RESULTS, CUR_EXPERIMENT_BATCH_NAME, results_folder_name)
 
 	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
 	n_frames         = []
@@ -1645,14 +1661,34 @@ if __name__ == "__main__":
 			#print "RBPF runtime (sum of all runs) = ", t1-t0
 			print "USE_CONSTANT_R = ", USE_CONSTANT_R
 			print "number of particles = ", N_PARTICLES
-			print "score intervals: ", SCORE_INTERVALS
-			print "run on sequences: ", SEQUENCES_TO_PROCESS
-			print "number of particles = ", N_PARTICLES
+#			print "score intervals: ", SCORE_INTERVALS
+#			print "run on sequences: ", SEQUENCES_TO_PROCESS
+#			print "number of particles = ", N_PARTICLES
 
 			sys.stdout.close()
 			sys.stdout = stdout
 
 			print "Printing works normally again!"
+
+			#evaluate each sequence independently as well:
+			for cur_seq_idx in SEQUENCES_TO_PROCESS:
+				#evaluate the results when all runs are complete
+				eval_metrics_file = results_folder + '/evaluation_metrics_seq%s.txt' % cur_seq_idx # + operator used for string concatenation!
+				stdout = sys.stdout
+				sys.stdout = open(eval_metrics_file, 'w')
+
+				runs_completed = eval_results(results_folder + "/results_by_run", [cur_seq_idx]) # + operateor used for string concatenation!
+
+				print "Number of runs completed = ", runs_completed
+				print "Description of run: ", DESCRIPTION_OF_RUN
+				print "Cached likelihoods = ", CACHED_LIKELIHOODS
+				print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+				#print "RBPF runtime (sum of all runs) = ", t1-t0
+				print "USE_CONSTANT_R = ", USE_CONSTANT_R
+				print "number of particles = ", N_PARTICLES
+	#			print "score intervals: ", SCORE_INTERVALS
+	#			print "run on sequences: ", SEQUENCES_TO_PROCESS
+	#			print "number of particles = ", N_PARTICLES
 
 		else:
 			#evaluate the results when all runs are complete
@@ -1672,6 +1708,14 @@ if __name__ == "__main__":
 
 	else: # peripheral == 'run'
 		print 'begin run'
+#debug
+		indicate_run_started_filename = '%s/results_by_run/run_%d/seq_%d_started.txt' % (results_folder, run_idx, seq_idx)
+		run_started_f = open(indicate_run_started_filename, 'w')
+		run_started_f.write("This run was started\n")
+		run_started_f.close()
+#end debug
+
+
 		indicate_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, run_idx, seq_idx)
 		#if we haven't already run, run now:
 		if not os.path.isfile(indicate_run_complete_filename):
@@ -1703,8 +1747,10 @@ if __name__ == "__main__":
 			#global NOT_BORDER_DEATH_PROBABILITIES
 
 
-			training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
-		#	training_sequences = [0]
+			#train on all training sequences, except the current sequence we are testing on
+			training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
+			#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
+			#training_sequences = [0]
 
 			#use regionlets and lsvm detections
 			if use_regionlets_and_lsvm:
@@ -1712,7 +1758,7 @@ if __name__ == "__main__":
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
 						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, \
+						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
 						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
 						include_ignored_detections = include_ignored_detections)
 
@@ -1722,8 +1768,9 @@ if __name__ == "__main__":
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
 					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-					obj_class = "car", doctor_clutter_probs = True, include_ignored_gt = include_ignored_gt, \
-					include_dontcare_in_gt = include_dontcare_in_gt, include_ignored_detections = include_ignored_detections)
+					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
+					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+					include_ignored_detections = include_ignored_detections)
 
 			assert(len(n_frames) == len(measurementTargetSetsBySequence))
 		#	############DEBUG
@@ -1753,6 +1800,8 @@ if __name__ == "__main__":
 			tA = time.time()
 			(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
 			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+			print "done processing sequence: ", seq_idx
+			
 			tB = time.time()
 			this_seq_run_time = tB - tA
 			cur_seq_info.append(this_seq_run_time)
@@ -1765,8 +1814,10 @@ if __name__ == "__main__":
 					#works for runtime and number of times resampling is performed
 					cur_run_info[info_idx] += cur_seq_info[info_idx]
 
+			print "about to write results"
 			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
-
+			print "done write results"
+			print "running the rbpf took %f seconds" % (tB-tA)
 		################END	for seq_idx in SEQUENCES_TO_PROCESS:
 			
 			info_by_run.append(cur_run_info)
