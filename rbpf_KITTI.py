@@ -18,7 +18,17 @@ import sys
 sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 import clearmetrics
 
+sys.path.insert(0, "./KITTI_helpers")
+from learn_params1 import get_clutter_probabilities_score_range_wrapper
+from learn_params1 import get_meas_target_set
+from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
+from jdk_helper_evaluate_results import eval_results
+
 import cProfile
+import time
+
+SEQUENCES_TO_PROCESS = [0]
+USE_PYTHON_GAUSSIAN = False
 
 #MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
 MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
@@ -65,10 +75,11 @@ if MULTIPLE_MEAS_PER_TIME:
 
 
 	#regionlet detection with score > 2.0:
-#	CLUTTER_COUNT_PRIOR = [0.9121932992900735 - .001, 0.08045833852285465, 0.006850168140490721, 0.0004981940465811433, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+
+	#CLUTTER_COUNT_PRIOR = [0.9121932992900735 - .001, 0.08045833852285465, 0.006850168140490721, 0.0004981940465811433, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
+	
 	#detections associated with don't care regions are counted as clutter
 	CLUTTER_COUNT_PRIOR = [0.7860256569933989, 0.17523975588491716 - .001, 0.031635321957902605, 0.004857391954166148, 0.0016191306513887158, 0.0003736455349358575, 0.00024909702329057166, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
-
 	P_TARGET_EMISSION = 0.813482 
 	#DEATH_PROBABILITIES = [-99, 0.1558803061934586, 0.24179829890643986, 0.1600831600831601, 0.10416666666666667, 0.08835341365461848, 0.04081632653061224, 0.06832298136645963, 0.06201550387596899, 0.04716981132075472, 0.056818181818181816, 0.013333333333333334, 0.028985507246376812, 0.03278688524590164, 0.0, 0.0, 0.0, 0.05, 0.0, 0.0625, 0.03571428571428571, 0.0, 0.0, 0.043478260869565216, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 	BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425, 0.2222222222222222, 0.35714285714285715, 0.2222222222222222, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -84,6 +95,7 @@ if MULTIPLE_MEAS_PER_TIME:
 #############	BORDER_DEATH_PROBABILITIES = [-99, 0.21912350597609562, 0.489010989010989, 0.4696132596685083, 0.53125, 0.32558139534883723, 0.20689655172413793, 0.4090909090909091, 0.15384615384615385, 0.09090909090909091, 0.2, 0.14285714285714285, 0.2, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 #############	NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.04987531172069826, 0.010845986984815618, 0.01791044776119403, 0.02127659574468085, 0.029535864978902954, 0.042105263157894736, 0.043478260869565216, 0.06015037593984962, 0.017094017094017096, 0.019801980198019802, 0.011494252873563218, 0.024691358024691357, 0.04, 0.0, 0.016129032258064516, 0.01694915254237288, 0.03773584905660377, 0.020833333333333332, 0.045454545454545456, 0.0, 0.02631578947368421, 0.02702702702702703, 0.0, 0.0, 0.0, 0.06666666666666667, 0.07692307692307693, 0.08333333333333333, 0.0, 0.09090909090909091, 0.0, 0.058823529411764705, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.08333333333333333, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.14285714285714285, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 #############
+
 
 else:
 	p_clutter_prior = .01 #probability of associating a measurement with clutter
@@ -106,6 +118,11 @@ P_default = np.array([[57.54277774, 0, 			 0, 0],
 # 					  [0, 			0, 11.98731406, 0],
 # 					  [0, 			0, 			 0, 3]])
 
+#P_default = np.array([[50.45678938, 0, 			 0, 0],
+# 					  [0,          10, 			 0, 0],
+# 					  [0, 			0, 11.98731406, 0],
+# 					  [0, 			0, 			 0, 3]])
+#
 
 #R_default = np.array([[ 57.54277774,  -0.29252698],
 # 					  [ -0.29252698,  17.86392672]])
@@ -113,6 +130,9 @@ P_default = np.array([[57.54277774, 0, 			 0, 0],
 #regionlet detection with score > 2.0:
 R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
  					  [ -3.60666228e-02,   1.64772050e+01]])
+#regionlet detection with score > 5.0:
+#R_default = np.array([[ 50.45678938,   0.2390161 ],
+# 					  [  0.2390161 ,  11.98731406]])
 
 #regionlet detection with score > 5.0:
 #R_default = np.array([[ 50.45678938,   0.2390161 ],
@@ -365,6 +385,11 @@ class TargetSet:
 		Kill target self.living_targets[living_target_index], note that living_target_index
 		may not be the target's id_ (or index in all_targets)
 		"""
+		
+		#kf predict was run for this time instance, but the target actually died, so remove the predicted state
+		del self.living_targets[living_target_index].all_states[-1]
+		del self.living_targets[living_target_index].all_time_stamps[-1]
+
 		del self.living_targets[living_target_index]
 		self.living_count -= 1
 		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
@@ -670,6 +695,9 @@ class Particle:
 		list_of_measurement_associations = []
 		proposal_probability = 1.0
 
+		#clutter count prior given the number of measurements we observed
+		cur_clutter_count_prior = CLUTTER_COUNT_PRIOR
+
 		#sample measurement associations
 		birth_count = 0
 		clutter_count = 0
@@ -699,8 +727,8 @@ class Particle:
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
-			for i in range(clutter_count+1, min(len(CLUTTER_COUNT_PRIOR), remaining_meas_count + clutter_count + 1)):
-				cur_clutter_prior += CLUTTER_COUNT_PRIOR[i]*(i - clutter_count)/remaining_meas_count 
+			for i in range(clutter_count+1, min(len(cur_clutter_count_prior), remaining_meas_count + clutter_count + 1)):
+				cur_clutter_prior += cur_clutter_count_prior[i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
@@ -1114,10 +1142,25 @@ class Particle:
 			state_mean_meas_space = np.dot(H, target.x)
 			#print type(state_mean_meas_space)
 			#print state_mean_meas_space
-			state_mean_meas_space = np.squeeze(state_mean_meas_space)
-			distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
 
-			assoc_likelihood = distribution.pdf(measurement)
+			state_mean_meas_space = np.squeeze(state_mean_meas_space)
+
+
+			if USE_PYTHON_GAUSSIAN:
+				distribution = multivariate_normal(mean=state_mean_meas_space, cov=S)
+				assoc_likelihood = distribution.pdf(measurement)
+			else:
+
+##					S_det = np.linalg.det(S)
+
+				S_det = S[0][0]*S[1][1] - S[0][1]*S[1][0] # a little faster
+				S_inv = inv(S)
+				LIKELIHOOD_DISTR_NORM = 1.0/math.sqrt((2*math.pi)**2*S_det)
+
+				offset = measurement - state_mean_meas_space
+				a = -.5*np.dot(np.dot(offset, S_inv), offset)
+				assoc_likelihood = LIKELIHOOD_DISTR_NORM*math.exp(a)
+
 			self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = assoc_likelihood
 			return assoc_likelihood
 
@@ -1471,13 +1514,21 @@ fh.close()
 print n_frames
 print sequence_name     
 assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-#for seq_idx in range(len(measurementTargetSetsBySequence)):
-for seq_idx in range(6,7):
+
+t0 = time.time()
+for seq_idx in SEQUENCES_TO_PROCESS:
 	print "Processing sequence: ", seq_idx
 	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
 	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
 											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
+t1 = time.time()
 
+print "RBPF runtime = ", t1-t0
+eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
+#print "USE_CONSTANT_R = ", USE_CONSTANT_R
+print "number of particles = ", N_PARTICLES
+#print "score intervals: ", SCORE_INTERVALS
+print "run on sequences: ", SEQUENCES_TO_PROCESS
 
 #test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
 #test_target_set.write_targets_to_KITTI_format(num_frames = 154, filename = 'test_read_write_0000_results.txt')

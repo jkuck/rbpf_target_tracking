@@ -11,7 +11,7 @@ else
 fi
 #time you think you need; default is one hour
 #in minutes in this case, hh:mm:ss
-#SBATCH --time=12:00:00
+#SBATCH --time=$TIME
 #################
 #quality of service; think of it as job priority
 #SBATCH --qos=normal
@@ -31,6 +31,11 @@ pip install numpy
 pip install filterpy
 pip install munkres
 
-cd /home/kuck/rbpf_target_tracking
 
-python rbpf_KITTI_det_scores.py
+echo $NUM_PARTICLES
+echo $INCLUDE_IGNORED_GT
+echo $INCLUDE_DONTCARE_IN_GT
+echo $USE_REGIONLETS_AND_LSVM
+echo $SORT_DETS_ON_INTERVALS
+
+python rbpf_KITTI_det_scores.py $NUM_PARTICLES $INCLUDE_IGNORED_GT $INCLUDE_DONTCARE_IN_GT $USE_REGIONLETS_AND_LSVM $SORT_DETS_ON_INTERVALS $RUN_IDX $NUM_RUNS $SEQ_IDX
