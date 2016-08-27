@@ -9,8 +9,9 @@ SEQUENCES_TO_PROCESS = [11]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
-CUR_EXPERIMENT_BATCH_NAME = 'view_new_death_probs'
-RUN_EVALUATION = True
+
+CUR_EXPERIMENT_BATCH_NAME = 'constant_R_test'
+RUN_EVALUATION = False
 
 
 
