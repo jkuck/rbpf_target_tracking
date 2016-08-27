@@ -37,9 +37,9 @@ import time
 import os
 USE_CREATE_CHILD = True #speed up copying during resampling
 
-from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
-from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
-from run_experiment_batch import SEQUENCES_TO_PROCESS
+from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
+from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
+from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
