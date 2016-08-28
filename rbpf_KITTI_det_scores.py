@@ -16,6 +16,8 @@ from numpy.linalg import inv
 import pickle
 import sys
 import resource
+import errno
+
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
@@ -37,9 +39,9 @@ import time
 import os
 USE_CREATE_CHILD = True #speed up copying during resampling
 
-from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
-from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
-from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
+from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
+from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
+from run_experiment_batch import SEQUENCES_TO_PROCESS
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
@@ -1559,7 +1561,7 @@ if __name__ == "__main__":
 	seq_idx = int(sys.argv[8]) #the index of the sequence to process
 	peripheral = sys.argv[9] #should we run setup, evaluation, or an actual run?
 
-	if not peripheral in ['setup', 'evaluate', 'run']:
+	if not peripheral in ['setup', 'evaluate', 'run', 'standalone']:
 		print "unexpected peripheral argument"
 		sys.exit(1);
 	else:
@@ -1706,7 +1708,7 @@ if __name__ == "__main__":
 		sys.exit(0);
 
 
-	else: # peripheral == 'run'
+	elif peripheral == 'run':
 		print 'begin run'
 #debug
 		indicate_run_started_filename = '%s/results_by_run/run_%d/seq_%d_started.txt' % (results_folder, run_idx, seq_idx)
@@ -1777,8 +1779,11 @@ if __name__ == "__main__":
 
 			sleep(5)
 
-			BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
-			NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+			#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+			#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+
+			#BORDER_DEATH_PROBABILITIES = [-99, 0.059085841694537344, 0.3982102908277405, 0.38953488372093026, 0.3611111111111111, 0.4722222222222222]
+			#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.0009339793357071974, 0.006880733944954129, 0.023255813953488372, 0.0481283422459893, 0.006944444444444444]
 
 			assert(len(n_frames) == len(measurementTargetSetsBySequence))
 		#	############DEBUG
@@ -1841,9 +1846,129 @@ if __name__ == "__main__":
 		print 'end run'
 		sys.exit(0);
 
+	else: #peripheral == 'standalone'
+
+		print 'begin standalone run'
+
+		#False doesn't really make sense because when actually running without ground truth information we don't know
+		#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+		#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+		#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+		#If this occured, it would make sense to try excluding these detections.)
+		include_ignored_detections = True 
+
+		if sort_dets_on_intervals:
+			REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+	#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
+	#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+		else:
+			REGIONLETS_SCORE_INTERVALS = [2]
+			LSVM_SCORE_INTERVALS = [0]
+
+		#set global variables
+		#global SCORE_INTERVALS
+		#global TARGET_EMISSION_PROBS
+		#global CLUTTER_PROBABILITIES
+		#global BIRTH_PROBABILITIES
+		#global MEAS_NOISE_COVS
+		#global BORDER_DEATH_PROBABILITIES
+		#global NOT_BORDER_DEATH_PROBABILITIES
 
 
+		#train on all training sequences, except the current sequence we are testing on
+		training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
+		#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
+		#training_sequences = [0]
 
+		#use regionlets and lsvm detections
+		if use_regionlets_and_lsvm:
+			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+					LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+					include_ignored_detections = include_ignored_detections)
+
+		#only use regionlets detections
+		else: 
+			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+				get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+				obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
+				include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+				include_ignored_detections = include_ignored_detections)
+
+		print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
+		print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
+
+		sleep(5)
+
+		#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+		#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+
+		#BORDER_DEATH_PROBABILITIES = [-99, 0.059085841694537344, 0.3982102908277405, 0.38953488372093026, 0.3611111111111111, 0.4722222222222222]
+		#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.0009339793357071974, 0.006880733944954129, 0.023255813953488372, 0.0481283422459893, 0.006944444444444444]
+
+		assert(len(n_frames) == len(measurementTargetSetsBySequence))
+	#	############DEBUG
+	#	
+	#	print "target emission probs: "
+	#	print TARGET_EMISSION_PROBS
+	#	print "cluter probs: "
+	#	print CLUTTER_PROBABILITIES
+	#	print "birth probs: "
+	#	print BIRTH_PROBABILITIES
+	#	print "Meas noise covs:"
+	#	print MEAS_NOISE_COVS
+	#	print "BORDER_DEATH_PROBABILITIES:"
+	#	print BORDER_DEATH_PROBABILITIES
+	#	print "NOT_BORDER_DEATH_PROBABILITIES:"
+	#	print NOT_BORDER_DEATH_PROBABILITIES
+	#	sleep(5)
+	#	##########DONE DEBUG
+
+		t0 = time.time()
+		info_by_run = [] #list of info from each run
+		cur_run_info = None
+	################	for seq_idx in SEQUENCES_TO_PROCESS:
+		filename = './temp_standalone_results.txt'
+
+		print "Processing sequence: ", seq_idx
+		tA = time.time()
+		(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+		print "done processing sequence: ", seq_idx
+		
+		tB = time.time()
+		this_seq_run_time = tB - tA
+		cur_seq_info.append(this_seq_run_time)
+		if cur_run_info == None:
+			cur_run_info = cur_seq_info
+		else:
+			assert(len(cur_run_info) == len(cur_seq_info))
+			for info_idx in len(cur_run_info):
+				#assuming for now info can be summed over each sequence in a run!
+				#works for runtime and number of times resampling is performed
+				cur_run_info[info_idx] += cur_seq_info[info_idx]
+
+		print "about to write results"
+		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+		print "done write results"
+		print "running the rbpf took %f seconds" % (tB-tA)
+	################END	for seq_idx in SEQUENCES_TO_PROCESS:
+		
+		info_by_run.append(cur_run_info)
+		t1 = time.time()
+
+
+		print "Resampling was performed %d times\n" % number_resamplings
+		print "This run took %f seconds\n" % (t1-t0)
+
+		print 'end run'
+		sys.exit(0);
 
 
 
