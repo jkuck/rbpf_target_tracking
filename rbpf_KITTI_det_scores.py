@@ -42,6 +42,7 @@ USE_CREATE_CHILD = True #speed up copying during resampling
 from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
 from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
 from run_experiment_batch import SEQUENCES_TO_PROCESS
+from run_experiment_batch import get_description_of_run
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
@@ -1580,33 +1581,8 @@ if __name__ == "__main__":
 	sort_dets_on_intervals = (sys.argv[5] == 'True')
 
 
-	if (not include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
-		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_with_score_intervals"
-
-	elif (not include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and (not sort_dets_on_intervals):
-		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_no_score_intervals"
-		
-	elif (not include_ignored_gt) and (not include_dontcare_in_gt) and (not use_regionlets_and_lsvm) and (sort_dets_on_intervals):
-			DESCRIPTION_OF_RUN = "regionlets_only_with_score_intervals"
-
-	elif (not include_ignored_gt) and (not include_dontcare_in_gt) and (not use_regionlets_and_lsvm) and (not sort_dets_on_intervals):
-		DESCRIPTION_OF_RUN = "regionlets_only_no_score_intervals"
-
-
-
-	elif (include_ignored_gt) and (not include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
-		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_ignored_gt"
-
-	elif (not include_ignored_gt) and (include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
-		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_dontcare_in_gt"
-
-	elif (include_ignored_gt) and (include_dontcare_in_gt) and use_regionlets_and_lsvm and sort_dets_on_intervals:
-		DESCRIPTION_OF_RUN = "lsvm_and_regionlets_include_ignored_and_dontcare_in_gt"
-
-	else:
-		print "Unexpected combination of boolean arguments"
-		sys.exit(1);
-
+	DESCRIPTION_OF_RUN = get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
+						   use_regionlets_and_lsvm, sort_dets_on_intervals)
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
 #	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup3/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
@@ -1777,7 +1753,7 @@ if __name__ == "__main__":
 			print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
 			print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
 
-			sleep(5)
+			#sleep(5)
 
 			#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
 			#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
@@ -1877,7 +1853,8 @@ if __name__ == "__main__":
 
 
 		#train on all training sequences, except the current sequence we are testing on
-		training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
+		#training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
+		training_sequences = [i for i in range(21)]
 		#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
 		#training_sequences = [0]
 

@@ -1469,9 +1469,9 @@ class MultiDetections:
                 for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
                     if (not (seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id) in gt_track_ids):
                         gt_track_ids.append((seq_idx, self.gt_objects[seq_idx][frame_idx][gt_idx].track_id))
-            print "sequence ", seq_idx, " contains ", len(self.gt_objects[seq_idx][-1]),
-            print " objects alive in the last frame (index ",  len(self.gt_objects[seq_idx]) - 1, ") and ", len(self.gt_objects[seq_idx][-2]),
-            print " objects alive in the 2nd to last frame "
+#            print "sequence ", seq_idx, " contains ", len(self.gt_objects[seq_idx][-1]),
+#            print " objects alive in the last frame (index ",  len(self.gt_objects[seq_idx]) - 1, ") and ", len(self.gt_objects[seq_idx][-2]),
+#            print " objects alive in the 2nd to last frame "
             #debug
 
             total_never_dead_count += len(self.gt_objects[seq_idx][-1])
@@ -1503,11 +1503,11 @@ class MultiDetections:
                         if num_unassoc_steps == time_unassociated \
                             and self.gt_objects[seq_idx][frame_idx][gt_idx].near_border == near_border:
                             count += 1
-        print "never associated gt count = ", never_associated_gt_count
-        print "total death count = ", total_death_count
-        print "total number of targets that never die (alive in last frame of a sequence): ", total_never_dead_count
-        print "total number of targets = ", len(gt_track_ids)
-        print "number of targets that die more than once = ", target_count_that_die_multiple_times
+#        print "never associated gt count = ", never_associated_gt_count
+#        print "total death count = ", total_death_count
+#        print "total number of targets that never die (alive in last frame of a sequence): ", total_never_dead_count
+#        print "total number of targets = ", len(gt_track_ids)
+#        print "number of targets that die more than once = ", target_count_that_die_multiple_times
         return count
 
 
@@ -1539,7 +1539,7 @@ class MultiDetections:
                     total_gt_object_count += 1
                     cur_gt_id = self.gt_objects[seq_idx][frame_idx][gt_idx].track_id
                     cur_gt_assoc = (cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx])
-                    cur_gt_unassoc_but_living_next_step = (cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx + 1]) and \
+                    cur_gt_unassoc_but_living_next_step = not (cur_gt_id in all_assoc_gt_ids_by_frame[seq_idx][frame_idx + 1]) and \
                                                           (cur_gt_id in all_gt_ids_by_frame[seq_idx][frame_idx + 1])
                     if cur_gt_assoc and cur_gt_unassoc_but_living_next_step:
                         num_unassoc_steps = 0
@@ -1614,15 +1614,22 @@ class MultiDetections:
         death_probs = [-99]
         death_counts = []
         living_counts = []
+        print '#'*80
+        print "get_death_probs info: "
         for i in range(5):
-            death_count = float(self.get_death_count1(i, near_border))
-            living_count = float(self.get_living_count1(i, near_border))
+            death_count = float(self.get_death_count(i, near_border))
+            living_count = float(self.get_living_count(i, near_border))
+            death_count1 = float(self.get_death_count1(i, near_border))
+            living_count1 = float(self.get_living_count1(i, near_border))
             death_counts.append(death_count)
             living_counts.append(living_count)
             if death_count + living_count == 0:
                 death_probs.append(1.0)
             else:
                 death_probs.append(death_count/(death_count + living_count))
+
+            print "time unassociated = %d:" % i, "death_count =", death_count, ", death_count1=", death_count1, ", living_count=", living_count, ", living_count1=", living_count1
+        print '#'*80
         return (death_probs, death_counts, living_counts)
 
 class AllData:
