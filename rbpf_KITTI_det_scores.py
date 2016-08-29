@@ -39,10 +39,10 @@ import time
 import os
 USE_CREATE_CHILD = True #speed up copying during resampling
 
-from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
-from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
-from run_experiment_batch import SEQUENCES_TO_PROCESS
-from run_experiment_batch import get_description_of_run
+from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
+from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
+from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
+from run_experiment_batch_sherlock import get_description_of_run
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
@@ -1812,12 +1812,24 @@ if __name__ == "__main__":
 			info_by_run.append(cur_run_info)
 			t1 = time.time()
 
+			stdout = sys.stdout
+			sys.stdout = open(indicate_run_complete_filename, 'w')
 
-			run_complete_f = open(indicate_run_complete_filename, 'w')
-			run_complete_f.write("This run is finished (and this file indicates the fact)\n")
-			run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
-			run_complete_f.write("This run took %f seconds\n" % (t1-t0))
-			run_complete_f.close()
+			print "This run is finished (and this file indicates the fact)\n"
+			print "Resampling was performed %d times\n" % number_resamplings
+			print "This run took %f seconds\n" % (t1-t0)
+
+			print "TARGET_EMISSION_PROBS=", TARGET_EMISSION_PROBS
+			print "CLUTTER_PROBABILITIES=", CLUTTER_PROBABILITIES
+			print "BIRTH_PROBABILITIES=", BIRTH_PROBABILITIES
+			print "MEAS_NOISE_COVS=", MEAS_NOISE_COVS
+			print "BORDER_DEATH_PROBABILITIES=", BORDER_DEATH_PROBABILITIES
+			print "NOT_BORDER_DEATH_PROBABILITIES=", NOT_BORDER_DEATH_PROBABILITIES
+
+
+			sys.stdout.close()
+			sys.stdout = stdout
+
 
 		print 'end run'
 		sys.exit(0);

@@ -41,6 +41,7 @@ def get_description_of_run(include_ignored_gt, include_dontcare_in_gt,
 
 	elif (include_ignored_gt) and (not include_dontcare_in_gt) and (not use_regionlets_and_lsvm) and (sort_dets_on_intervals):
 			description_of_run = "regionlets_only_include_ignored_gt_with_score_intervals"
+			
 	else:
 		print "Unexpected combination of boolean arguments"
 		sys.exit(1);
