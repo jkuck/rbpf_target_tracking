@@ -17,6 +17,8 @@ import pickle
 import sys
 import resource
 import errno
+from munkres import Munkres
+
 
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
@@ -31,8 +33,8 @@ from jdk_helper_evaluate_results import eval_results
 #from proposal2_helper import memoized_birth_clutter_prior
 #from proposal2_helper import sample_birth_clutter_counts
 #from proposal2_helper import sample_target_deaths_proposal2
-#random.seed(5)
-#np.random.seed(seed=5)
+random.seed(5)
+np.random.seed(seed=5)
 
 import cProfile
 import time
@@ -704,7 +706,7 @@ class Particle:
 
 		Output:
 		- list_of_measurement_associations: list of associations for each measurement
-		- proposal_probability: proposal probability of the sampled deaths and assocations
+		- proposal_probability: proposal probability of the sampled deaths and associations
 			
 		"""
 		list_of_measurement_associations = []
@@ -790,7 +792,7 @@ class Particle:
 		- targets_to_kill: a list of targets that have been sampled to die (not killed yet)
 		- measurement_associations: type list, measurement_associations[i] is a list of associations for  
 			the measurements in measurement_lists[i]
-		- proposal_probability: proposal probability of the sampled deaths and assocations
+		- proposal_probability: proposal probability of the sampled deaths and associations
 			
 		"""
 		assert(len(measurement_lists) == len(measurement_scores))
@@ -1543,6 +1545,104 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	estimated_ts.plot_all_target_locations("Estimated Tracks")      
 	plt.show()
 
+class KittiTarget:
+	"""
+	Used for computing target associations when outputing online results and the particle with
+	the largest importance weight changes
+
+	Values:
+	- x1: smaller x coordinate of bounding box
+	- x2: larger x coordinate of bounding box
+	- y1: smaller y coordinate of bounding box
+	- y2: larger y coordinate of bounding box
+	"""
+	def __init__(self, x1, x2, y1, y2):
+		self.x1 = x1
+		self.x2 = x2
+		self.y1 = y1
+		self.y2 = y2
+
+def boxoverlap(self,a,b):
+    """
+    	Copied from  KITTI devkit_tracking/python/evaluate_tracking.py
+
+        boxoverlap computes intersection over union for bbox a and b in KITTI format.
+        If the criterion is 'union', overlap = (a inter b) / a union b).
+        If the criterion is 'a', overlap = (a inter b) / a, where b should be a dontcare area.
+    """
+    x1 = max(a.x1, b.x1)
+    y1 = max(a.y1, b.y1)
+    x2 = min(a.x2, b.x2)
+    y2 = min(a.y2, b.y2)
+    
+    w = x2-x1
+    h = y2-y1
+
+    if w<=0. or h<=0.:
+        return 0.
+    inter = w*h
+    aarea = (a.x2-a.x1) * (a.y2-a.y1)
+    barea = (b.x2-b.x1) * (b.y2-b.y1)
+    # intersection over union overlap
+    o = inter / float(aarea+barea-inter)
+    return o
+
+def convert_targets(input_targets):
+	kitti_format_targets = []
+	for cur_target in particle1_targets:
+		x_pos = cur_target.x[0][0]
+		y_pos = cur_target.x[2][0]
+		width = cur_target.width
+		height = cur_target.height
+
+		left = x_pos - width/2.0
+		top = y_pos - height/2.0
+		right = x_pos + width/2.0
+		bottom = y_pos + height/2.0		
+
+		kitti_format_targets.append(KittiTarget(left, right, top, bottom))
+	return kitti_format_targets
+
+def match_target_ids(particle1_targets, particle2_targets):
+	"""
+	Use the same association as in  KITTI devkit_tracking/python/evaluate_tracking.py
+
+	Inputs:
+	- particle1_targets: a list of targets from particle1
+	- particle2_targets: a list of targets from particle2
+
+	Output:
+	- associations: a list of associations between targets in particle1 and particle2.  associations[i] is a
+		tuple representing the ith association (particle1_targetID, particle2_targetID)
+	"""
+	kitti_targets1 = convert_targets(particle1_targets)
+	kitti_targets2 = convert_targets(particle2_targets)
+
+	hm = Munkres()
+	max_cost = 1e9
+	cost_matrix = []
+	for cur_t1 in kitti_targets1:
+		cost_row = []
+		for cur_t2 in kitti_targets2:
+			# overlap == 1 is cost ==0
+			c = 1-self.boxoverlap(gg,tt)
+			# gating for boxoverlap
+			if c<=.5:
+				cost_row.append(c)
+			else:
+				cost_row.append(max_cost)
+		cost_matrix.append(cost_row)
+
+	# associate
+	association_matrix = hm.compute(cost_matrix)
+	associations = []
+	for row,col in association_matrix:
+		c = cost_matrix[row][col]
+		if c < max_cost:
+			associations.append((particle1_targets[row].id_, particle2_targets[col].id_))
+
+	return associations
+
 
 if __name__ == "__main__":
 	
@@ -1813,10 +1913,25 @@ if __name__ == "__main__":
 			t1 = time.time()
 
 
-			run_complete_f = open(indicate_run_complete_filename, 'w')
-			run_complete_f.write("This run is finished (and this file indicates the fact)\n")
-			run_complete_f.write("Resampling was performed %d times\n" % number_resamplings)
-			run_complete_f.write("This run took %f seconds\n" % (t1-t0))
+			stdout = sys.stdout
+			sys.stdout = open(indicate_run_complete_filename, 'w')
+
+			print "This run is finished (and this file indicates the fact)\n"
+			print "Resampling was performed %d times\n" % number_resamplings
+			print "This run took %f seconds\n" % (t1-t0)
+
+			print "TARGET_EMISSION_PROBS=", TARGET_EMISSION_PROBS
+			print "CLUTTER_PROBABILITIES=", CLUTTER_PROBABILITIES
+			print "BIRTH_PROBABILITIES=", BIRTH_PROBABILITIES
+			print "MEAS_NOISE_COVS=", MEAS_NOISE_COVS
+			print "BORDER_DEATH_PROBABILITIES=", BORDER_DEATH_PROBABILITIES
+			print "NOT_BORDER_DEATH_PROBABILITIES=", NOT_BORDER_DEATH_PROBABILITIES
+
+
+			sys.stdout.close()
+			sys.stdout = stdout
+
+
 			run_complete_f.close()
 
 		print 'end run'
@@ -1881,7 +1996,7 @@ if __name__ == "__main__":
 		print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
 		print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
 
-		sleep(5)
+		#sleep(5)
 
 		#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
 		#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
