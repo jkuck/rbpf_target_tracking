@@ -267,9 +267,8 @@ class Target:
 #			self.x = np.array([[position], [velocity]])
 #			self.P = P_default
 		assert(measurement != None)
-		else:
-			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [width], [height]])
-			self.P = P_default
+		self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [width], [height]])
+		self.P = P_default
 
 		self.width = width
 		self.height = height
