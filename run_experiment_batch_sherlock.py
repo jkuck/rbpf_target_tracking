@@ -2,7 +2,7 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=3
+NUM_RUNS=1
 SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [11]
 #SEQUENCES_TO_PROCESS = [0]
@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = 'debugged_death_probs_3TimeStepsMarkovChain_onlineResults_goodIDS_variable_R_doubleQ'
+CUR_EXPERIMENT_BATCH_NAME = 'debugged_death_probs_3TimeStepsMarkovChain_onlineResults_goodIDS_variable_R_4xQ'
 RUN_EVALUATION = True
 
 
