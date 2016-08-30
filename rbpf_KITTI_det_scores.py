@@ -513,7 +513,10 @@ class TargetSet:
 
 
 	def write_online_results(self, online_results_filename, frame_idx):
-		f = open(online_results_filename, "a") #write at end of file
+		if frame_idx == 0:
+			f = open(online_results_filename, "w") #write over old results if first frame
+		else:
+			f = open(online_results_filename, "a") #write at end of file
 
 		for target in self.living_targets:
 			assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
