@@ -81,7 +81,7 @@ default_time_step = .1
 REPLACE_STATE_WITH_MEAUREMENT_AFTER_KF_UPDATE = False
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
