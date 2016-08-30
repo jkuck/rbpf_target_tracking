@@ -32,8 +32,8 @@ from jdk_helper_evaluate_results import eval_results
 #from proposal2_helper import memoized_birth_clutter_prior
 #from proposal2_helper import sample_birth_clutter_counts
 #from proposal2_helper import sample_target_deaths_proposal2
-random.seed(5)
-np.random.seed(seed=5)
+#random.seed(5)
+#np.random.seed(seed=5)
 
 import cProfile
 import time
