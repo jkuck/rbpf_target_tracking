@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = 'debugged_death_probs_3TimeStepsMarkovChain_onlineResults_goodIDS_variable_R'
+CUR_EXPERIMENT_BATCH_NAME = 'debugged_death_probs_3TimeStepsMarkovChain_onlineResults_goodIDS_variable_R_doubleQ'
 RUN_EVALUATION = True
 
 
@@ -123,11 +123,11 @@ def submit_single_experiment(num_particles, include_ignored_gt=False, include_do
 
 
 if __name__ == "__main__":
-	#lsvm_and_regionlets_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
+#	#lsvm_and_regionlets_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
 
 	#lsvm_and_regionlets_no_score_intervals
 	for num_particles in NUM_PARTICLES_TO_TEST:
@@ -135,38 +135,39 @@ if __name__ == "__main__":
 								include_ignored_gt=False, include_dontcare_in_gt=False, 
 								use_regionlets_and_lsvm=True, sort_dets_on_intervals=False)
 
-	#regionlets_only_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+#	#regionlets_only_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
 
 	#regionlets_only_no_score_intervals
 	for num_particles in NUM_PARTICLES_TO_TEST:
 		submit_single_experiment(num_particles=num_particles, 
 								include_ignored_gt=False, include_dontcare_in_gt=False, 
 								use_regionlets_and_lsvm=False, sort_dets_on_intervals=False)
-
-	#lsvm_and_regionlets_include_ignored_gt
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=True, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
-
-	#lsvm_and_regionlets_include_dontcare_in_gt
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=True, 
-								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
-
-	#lsvm_and_regionlets_include_ignored_and_dontcare_in_gt
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=True, include_dontcare_in_gt=True, 
-								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
-
-	#regionlets_only_include_ignored_gt_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=True, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+#
+#	#lsvm_and_regionlets_include_ignored_gt
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=True, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
+#
+#	#lsvm_and_regionlets_include_dontcare_in_gt
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=True, 
+#								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
+#
+#	#lsvm_and_regionlets_include_ignored_and_dontcare_in_gt
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=True, include_dontcare_in_gt=True, 
+#								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
+#
+#	#regionlets_only_include_ignored_gt_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=True, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+#
