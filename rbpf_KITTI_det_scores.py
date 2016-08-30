@@ -3,9 +3,9 @@ from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 from filterpy.monte_carlo import stratified_resample
 import filterpy
-import matplotlib.pyplot as plt
-import matplotlib.cm as cmx
-import matplotlib.colors as colors
+#import matplotlib.pyplot as plt
+#import matplotlib.cm as cmx
+#import matplotlib.colors as colors
 from scipy.stats import multivariate_normal
 from scipy.stats import gamma
 from scipy.special import gdtrc
@@ -15,37 +15,65 @@ import math
 from numpy.linalg import inv
 import pickle
 import sys
-sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
-import clearmetrics
+import resource
+import errno
+from munkres import Munkres
+
+#sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
+#import clearmetrics
 sys.path.insert(0, "./KITTI_helpers")
-from learn_params1 import get_clutter_probabilities_score_range_wrapper
 from learn_params1 import get_meas_target_set
+from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
+from learn_params1 import get_meas_target_sets_regionlets_general_format
 from jdk_helper_evaluate_results import eval_results
 
-from multiple_meas_per_time_assoc_priors import HiddenState
-from proposal2_helper import possible_measurement_target_associations
-from proposal2_helper import memoized_birth_clutter_prior
-from proposal2_helper import sample_birth_clutter_counts
-from proposal2_helper import sample_target_deaths_proposal2
+#from multiple_meas_per_time_assoc_priors import HiddenState
+#from proposal2_helper import possible_measurement_target_associations
+#from proposal2_helper import memoized_birth_clutter_prior
+#from proposal2_helper import sample_birth_clutter_counts
+#from proposal2_helper import sample_target_deaths_proposal2
+#random.seed(5)
+#np.random.seed(seed=5)
 
 import cProfile
 import time
+import os
+from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
+from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
+from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
+from run_experiment_batch_sherlock import get_description_of_run
 
-#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_lsvm_min_score_0.0.pickle"
-#MEASURMENT_FILENAME = "KITTI_helpers/KITTI_measurements_car_regionlets_min_score_2.0.pickle"
 
-#run on these sequences
-SEQUENCES_TO_PROCESS = [0]
-#eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
+USE_CREATE_CHILD = True #speed up copying during resampling
+RUN_ONLINE = True #save online results 
+
+######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
+######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
+#######run on these sequences
+#######SEQUENCES_TO_PROCESS = [0]
+######SEQUENCES_TO_PROCESS = [i for i in range(21)]
+
+#Variables defined in main ARE global I think, not needed here (triple check...)
+#define global variables, which will be set in main
+#SCORE_INTERVALS = None
+#TARGET_EMISSION_PROBS = None
+#CLUTTER_PROBABILITIES = None
+#BIRTH_PROBABILITIES = None
+#MEAS_NOISE_COVS = None
+#BORDER_DEATH_PROBABILITIES = None
+#NOT_BORDER_DEATH_PROBABILITIES = None
+
+
+#SEQUENCES_TO_PROCESS = [i for i in range(21)]
+#eval_results('./rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
 #sleep(5)
 #RBPF algorithmic paramters
-N_PARTICLES = 100 #number of particles used in the particle filter
+
 RESAMPLE_RATIO = 2.0 #resample when get_eff_num_particles < N_PARTICLES/RESAMPLE_RATIO
 
 DEBUG = False
 
 USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check USE_CONSTANT_R
-USE_PROPOSAL_DISTRIBUTION_3 = True #sample measurement associations sequentially, then unassociated target deaths
 
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
@@ -58,22 +86,22 @@ USE_CONSTANT_R = False
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
 
-SCORE_INTERVALS = [i for i in range(2, 20)]
-(measurementTargetSetsBySequence, target_emission_probs, clutter_probabilities, birth_probabilities,\
-	meas_noise_covs) = get_meas_target_set(SCORE_INTERVALS, det_method = "regionlets", obj_class = "car", doctor_clutter_probs = True)
+
+
+
 #from learn_params
 #BIRTH_COUNT_PRIOR = [0.9371030016191306, 0.0528085689376012, 0.007223813675426578, 0.0016191306513887158, 0.000747291069871715, 0.00012454851164528583, 0, 0.00012454851164528583, 0.00012454851164528583, 0, 0, 0, 0, 0.00012454851164528583]
 #from learn_params1, not counting 'ignored' ground truth
 BIRTH_COUNT_PRIOR = [0.95640802092415, 0.039357329679910326, 0.0027400672561962883, 0.0008718395815170009, 0.00012454851164528583, 0.00012454851164528583, 0, 0.00024909702329057166, 0, 0, 0.00012454851164528583]
 
-def get_param_index(score_intervals, score):
+def get_score_index(score_intervals, score):
 	"""
 	Inputs:
 	- score_intervals: a list specifying detection score ranges for which parameters have been specified
 	- score: the score of a detection
 
 	Output:
-	- index: output the index in parameter lists corresponding to the range this score is in
+	- index: output the 0 indexed score interval this score falls into
 	"""
 
 	index = 0
@@ -98,10 +126,22 @@ P_TARGET_EMISSION = 0.813358070501
 #BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425, 0.2222222222222222, 0.35714285714285715, 0.2222222222222222, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 #NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035, 0.02247191011235955, 0.04081632653061224, 0.05, 0.05, 0.036585365853658534, 0.013888888888888888, 0.030303030303030304, 0.03389830508474576, 0.0, 0.0, 0.0, 0.05128205128205128, 0.0, 0.06451612903225806, 0.037037037037037035, 0.0, 0.0, 0.045454545454545456, 0.0, 0.05555555555555555, 0.0, 0.0625, 0.07142857142857142, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09090909090909091, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.16666666666666666, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3333333333333333, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
+#from learn_params.py
+#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
 
-BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
-NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+#BORDER_DEATH_PROBABILITIES = [-99, 0.3116591928251121, 0.5483870967741935, 0.5833333333333334, 0.8571428571428571, 1.0]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.001880843060242297, 0.026442307692307692, 0.04918032786885246, 0.06818181818181818, 0.008]
 
+#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+
+
+#BORDER_DEATH_PROBABILITIES = [-99, 0.8, 0.5, 0.3, 0.4, 0.8]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.07, 0.025, 0.03, 0.03, 0.006]
+
+#BORDER_DEATH_PROBABILITIES = [-99, 0.9430523917995444, 0.6785714285714286, 0.4444444444444444, 0.5, 1.0]
+#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.08235294117647059, 0.02284263959390863, 0.04150943396226415, 0.041237113402061855, 0.00684931506849315]
 #from learn_params
 #CLUTTER_COUNT_PRIOR = [0.7860256569933989, 0.17523975588491716 - .001, 0.031635321957902605, 0.004857391954166148, 0.0016191306513887158, 0.0003736455349358575, 0.00024909702329057166, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0, .001/20.0]
 #from learn_params1, not counting 'ignored' ground truth
@@ -221,11 +261,12 @@ def get_cmap(N):
 
 class Target:
 	def __init__(self, cur_time, id_, measurement = None, width=-1, height=-1):
-		if measurement is None: #for data generation
-			position = np.random.uniform(min_pos,max_pos)
-			velocity = np.random.uniform(min_vel,max_vel)
-			self.x = np.array([[position], [velocity]])
-			self.P = P_default
+#		if measurement is None: #for data generation
+#			position = np.random.uniform(min_pos,max_pos)
+#			velocity = np.random.uniform(min_vel,max_vel)
+#			self.x = np.array([[position], [velocity]])
+#			self.P = P_default
+		assert(measurement != None)
 		else:
 			self.x = np.array([[measurement[0]], [0], [measurement[1]], [0], [width], [height]])
 			self.P = P_default
@@ -396,7 +437,7 @@ class Target:
 					cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[-1]
 #					cur_death_prob = 1.0
 
-		assert(cur_death_prob >= 0.0 and cur_death_prob <= 1.0)
+		assert(cur_death_prob >= 0.0 and cur_death_prob <= 1.0), cur_death_prob
 		return cur_death_prob
 
 class Measurement:
@@ -425,13 +466,31 @@ class TargetSet:
 		self.total_count = 0 #number of living targets plus number of dead targets
 		self.measurements = [] #generated measurements for a generative TargetSet 
 
+		self.parent_target_set = None 
+
+	def create_child(self):
+		child_target_set = TargetSet()
+		child_target_set.parent_target_set = self
+		child_target_set.total_count = self.total_count
+		child_target_set.living_count = self.living_count
+		child_target_set.all_targets = copy.deepcopy(self.living_targets)
+		for target in child_target_set.all_targets:
+			child_target_set.living_targets.append(target)
+		return child_target_set
+
 	def create_new_target(self, measurement, width, height, cur_time):
-		new_target = Target(cur_time, self.total_count, np.squeeze(measurement), width, height)
+		if RUN_ONLINE:
+			global NEXT_TARGET_ID
+			new_target = Target(cur_time, NEXT_TARGET_ID, np.squeeze(measurement), width, height)
+			NEXT_TARGET_ID += 1
+		else:
+			new_target = Target(cur_time, self.total_count, np.squeeze(measurement), width, height)
 		self.living_targets.append(new_target)
 		self.all_targets.append(new_target)
 		self.living_count += 1
 		self.total_count += 1
-		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
+		if not USE_CREATE_CHILD:
+			assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
 
 
 	def kill_target(self, living_target_index):
@@ -439,9 +498,16 @@ class TargetSet:
 		Kill target self.living_targets[living_target_index], note that living_target_index
 		may not be the target's id_ (or index in all_targets)
 		"""
+
+		#kf predict was run for this time instance, but the target actually died, so remove the predicted state
+		del self.living_targets[living_target_index].all_states[-1]
+		del self.living_targets[living_target_index].all_time_stamps[-1]
+
 		del self.living_targets[living_target_index]
+
 		self.living_count -= 1
-		assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
+		if not USE_CREATE_CHILD:
+			assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
 
 	def plot_all_target_locations(self, title):
 		fig = plt.figure()
@@ -466,31 +532,104 @@ class TargetSet:
 		ax.plot(time_stamps, locations,'o')
 		plt.title('Generated Measurements') 
 
+	def collect_ancestral_targets(self, descendant_target_ids=[]):
+		"""
+		Inputs:
+		- descendant_target_ids: a list of target ids that exist in the calling child's all_targets list
+			(or the all_targets list of a descendant of the calling child)
+
+		Outputs:
+		- every_target: every target in this TargetSet's all_targets list and
+		#every target in any of this TargetSet's ancestors' all_targets lists that does not
+		#appear in the all_targets list of a descendant
+		"""
+		every_target = []
+		found_target_ids = descendant_target_ids
+		for target in self.all_targets:
+			if(not target.id_ in found_target_ids):
+				every_target.append(target)
+				found_target_ids.append(target.id_)
+		if self.parent_target_set == None:
+			return every_target
+		else:
+			ancestral_targets = self.parent_target_set.collect_ancestral_targets(found_target_ids)
+
+		every_target = every_target + ancestral_targets # + operator used to concatenate lists!
+		return every_target
+
+
+	def write_online_results(self, online_results_filename, frame_idx):
+		if frame_idx == 0:
+			f = open(online_results_filename, "w") #write over old results if first frame
+		else:
+			f = open(online_results_filename, "a") #write at end of file
+
+		for target in self.living_targets:
+			assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
+			x_pos = target.all_states[-1][0][0][0]
+			y_pos = target.all_states[-1][0][2][0]
+			width = target.all_states[-1][1]
+			height = target.all_states[-1][2]
+
+			left = x_pos - width/2.0
+			top = y_pos - height/2.0
+			right = x_pos + width/2.0
+			bottom = y_pos + height/2.0		 
+			f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+				(frame_idx, target.id_, left, top, right, bottom))
+
 
 	def write_targets_to_KITTI_format(self, num_frames, filename):
-		f = open(filename, "w")
-		for frame_idx in range(num_frames):
-			timestamp = frame_idx*default_time_step
-			for target in self.all_targets:
-				if timestamp in target.all_time_stamps:
-					x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
-					y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
-					width = target.all_states[target.all_time_stamps.index(timestamp)][1]
-					height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+		if USE_CREATE_CHILD:
+			every_target = self.collect_ancestral_targets()
+			f = open(filename, "w")
+			for frame_idx in range(num_frames):
+				timestamp = frame_idx*default_time_step
+				for target in every_target:
+					if timestamp in target.all_time_stamps:
+						x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
+						y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
+						width = target.all_states[target.all_time_stamps.index(timestamp)][1]
+						height = target.all_states[target.all_time_stamps.index(timestamp)][2]
 
-					left = x_pos - width/2.0
-					top = y_pos - height/2.0
-					right = x_pos + width/2.0
-					bottom = y_pos + height/2.0		 
-					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-						(frame_idx, target.id_, left, top, right, bottom))
-#					left = target.x[0][0] - target.width/2
-#					top = target.x[2][0] - target.height/2
-#					right = target.x[0][0] + target.width/2
-#					bottom = target.x[2][0] + target.height/2		 
-#					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-#						(frame_idx, target.id_, left, top, right, bottom))
-		f.close()
+						left = x_pos - width/2.0
+						top = y_pos - height/2.0
+						right = x_pos + width/2.0
+						bottom = y_pos + height/2.0		 
+						f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+							(frame_idx, target.id_, left, top, right, bottom))
+	#					left = target.x[0][0] - target.width/2
+	#					top = target.x[2][0] - target.height/2
+	#					right = target.x[0][0] + target.width/2
+	#					bottom = target.x[2][0] + target.height/2		 
+	#					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+	#						(frame_idx, target.id_, left, top, right, bottom))
+			f.close()
+
+		else:
+			f = open(filename, "w")
+			for frame_idx in range(num_frames):
+				timestamp = frame_idx*default_time_step
+				for target in self.all_targets:
+					if timestamp in target.all_time_stamps:
+						x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
+						y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
+						width = target.all_states[target.all_time_stamps.index(timestamp)][1]
+						height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+
+						left = x_pos - width/2.0
+						top = y_pos - height/2.0
+						right = x_pos + width/2.0
+						bottom = y_pos + height/2.0		 
+						f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+							(frame_idx, target.id_, left, top, right, bottom))
+	#					left = target.x[0][0] - target.width/2
+	#					top = target.x[2][0] - target.height/2
+	#					right = target.x[0][0] + target.width/2
+	#					bottom = target.x[2][0] + target.height/2		 
+	#					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+	#						(frame_idx, target.id_, left, top, right, bottom))
+			f.close()
 
 
 class Particle:
@@ -503,7 +642,9 @@ class Particle:
 		#cache for memoizing association likelihood computation
 		self.assoc_likelihood_cache = {}
 
-		self.id_ = id_
+		self.id_ = id_ #will be the same as the parent's id when copying in create_child
+
+		self.parent_id = -1
 
 		#for debugging
 		self.c_debug = -1
@@ -512,9 +653,11 @@ class Particle:
 		self.pi_clutter_debug = -1
 		self.pi_targets_debug = []
 
-	def child_copy(self, id_):
-		child_particle = Particle(id_)
+	def create_child(self):
+		child_particle = Particle(self.id_)
 		child_particle.importance_weight = self.importance_weight
+		child_particle.targets = self.targets.create_child()
+		return child_particle
 
 	def create_new_target(self, measurement, width, height, cur_time):
 		self.targets.create_new_target(measurement, width, height, cur_time)
@@ -556,16 +699,23 @@ class Particle:
 
 
 
-	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_list, cur_time, measurement_scores):
+	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_lists, \
+		cur_time, measurement_scores):
 		"""
 		Input:
-		- measurement_list: a list of all measurements from the current time instance
+		- measurement_lists: a list where measurement_lists[i] is a list of all measurements from the current
+			time instance from the ith measurement source (i.e. different object detection algorithms
+			or different sensors)
+		- measurement_scores: a list where measurement_scores[i] is a list containing scores for every measurement in
+			measurement_list[i]
+
 		Output:
-		- measurement_associations: A list of association values for each measurement.  Values of c correspond to:
-			c[i] = -1 -> ith measurement is clutter
-			c[i] = self.targets.living_count -> ith measurement is a new target
-			c[i] in range [0, self.targets.living_count-1] -> ith measurement is of
-				particle.targets.living_targets[c[i]]
+		- measurement_associations: A list where measurement_associations[i] is a list of association values
+			for each measurements in measurement_lists[i].  Association values correspond to:
+			measurement_associations[i][j] = -1 -> measurement is clutter
+			measurement_associations[i][j] = self.targets.living_count -> measurement is a new target
+			measurement_associations[i][j] in range [0, self.targets.living_count-1] -> measurement is of
+				particle.targets.living_targets[measurement_associations[i][j]]
 
 		- imprt_re_weight: After processing this measurement the particle's
 			importance weight will be:
@@ -583,7 +733,8 @@ class Particle:
 
 
 		(targets_to_kill, measurement_associations, proposal_probability, unassociated_target_death_probs) = \
-			self.sample_proposal_distr3(measurement_list, self.targets.living_count, p_target_deaths, cur_time, measurement_scores)
+			self.sample_proposal_distr3(measurement_lists, self.targets.living_count, p_target_deaths, \
+										cur_time, measurement_scores)
 
 
 		living_target_indices = []
@@ -593,9 +744,15 @@ class Particle:
 
 #		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
 #												 measurement_associations, p_target_deaths)
+		exact_probability = 1.0
+		for meas_source_index in range(len(measurement_lists)):
+			cur_assoc_prob = self.get_exact_prob_hidden_and_data(meas_source_index, measurement_lists[meas_source_index], \
+				living_target_indices, self.targets.living_count, measurement_associations[meas_source_index],\
+				unassociated_target_death_probs, measurement_scores[meas_source_index], SCORE_INTERVALS[meas_source_index])
+			exact_probability *= cur_assoc_prob
 
-		exact_probability = self.get_exact_prob_hidden_and_data(measurement_list, living_target_indices, self.targets.living_count, 
-												 measurement_associations, unassociated_target_death_probs, measurement_scores, SCORE_INTERVALS)
+		exact_death_prob = self.calc_death_prior(living_target_indices, p_target_deaths)
+		exact_probability *= exact_death_prob
 
 		assert(num_targs == self.targets.living_count)
 		#double check targets_to_kill is sorted
@@ -607,7 +764,10 @@ class Particle:
 
 		return (measurement_associations, targets_to_kill, imprt_re_weight)
 
-	def sample_proposal_distr3(self, measurement_list, total_target_count, p_target_deaths, cur_time, measurement_scores):
+
+	def associate_measurements_proposal_distr3(self, meas_source_index, measurement_list, total_target_count, \
+		p_target_deaths, measurement_scores):
+
 		"""
 		Try sampling associations with each measurement sequentially
 		Input:
@@ -618,7 +778,6 @@ class Particle:
 			time instance and the current time instance
 
 		Output:
-		- targets_to_kill: a list of targets that have been sampled to die (not killed yet)
 		- list_of_measurement_associations: list of associations for each measurement
 		- proposal_probability: proposal probability of the sampled deaths and assocations
 			
@@ -631,19 +790,19 @@ class Particle:
 		clutter_count = 0
 		remaining_meas_count = len(measurement_list)
 		for (index, cur_meas) in enumerate(measurement_list):
-			param_index = get_param_index(SCORE_INTERVALS, measurement_scores[index])
+			score_index = get_score_index(SCORE_INTERVALS[meas_source_index], measurement_scores[index])
 			#create proposal distribution for the current measurement
 			#compute target association proposal probabilities
 			proposal_distribution_list = []
 			for target_index in range(total_target_count):
-				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, target_index, meas_noise_covs[param_index], param_index)
+				cur_target_likelihood = self.memoized_assoc_likelihood(cur_meas, meas_source_index, target_index, MEAS_NOISE_COVS[meas_source_index][score_index], score_index)
 				targ_likelihoods_summed_over_meas = 0.0
 				for meas_index in range(len(measurement_list)):
-					temp_param_index = get_param_index(SCORE_INTERVALS, measurement_scores[meas_index]) #param_index for the meas_index in this loop
-					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], target_index,  meas_noise_covs[temp_param_index], temp_param_index)
+					temp_score_index = get_score_index(SCORE_INTERVALS[meas_source_index], measurement_scores[meas_index]) #score_index for the meas_index in this loop
+					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], meas_source_index, target_index,  MEAS_NOISE_COVS[meas_source_index][temp_score_index], temp_score_index)
 				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)\
 					and p_target_deaths[target_index] < 1.0):
-					cur_target_prior = target_emission_probs[param_index]*cur_target_likelihood \
+					cur_target_prior = TARGET_EMISSION_PROBS[meas_source_index][score_index]*cur_target_likelihood \
 									  /targ_likelihoods_summed_over_meas
 #					cur_target_prior = P_TARGET_EMISSION*cur_target_likelihood \
 #									  /targ_likelihoods_summed_over_meas
@@ -654,14 +813,14 @@ class Particle:
 
 			#compute birth association proposal probability
 			cur_birth_prior = 0.0
-			for i in range(birth_count+1, min(len(birth_probabilities[param_index]), remaining_meas_count + birth_count + 1)):
-				cur_birth_prior += birth_probabilities[param_index][i]*(i - birth_count)/remaining_meas_count 
+			for i in range(birth_count+1, min(len(BIRTH_PROBABILITIES[meas_source_index][score_index]), remaining_meas_count + birth_count + 1)):
+				cur_birth_prior += BIRTH_PROBABILITIES[meas_source_index][score_index][i]*(i - birth_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_birth_prior*p_birth_likelihood)
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
-			for i in range(clutter_count+1, min(len(clutter_probabilities[param_index]), remaining_meas_count + clutter_count + 1)):
-				cur_clutter_prior += clutter_probabilities[param_index][i]*(i - clutter_count)/remaining_meas_count 
+			for i in range(clutter_count+1, min(len(CLUTTER_PROBABILITIES[meas_source_index][score_index]), remaining_meas_count + clutter_count + 1)):
+				cur_clutter_prior += CLUTTER_PROBABILITIES[meas_source_index][score_index][i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
@@ -685,12 +844,53 @@ class Particle:
 
 			remaining_meas_count -= 1
 		assert(remaining_meas_count == 0)
+		return(list_of_measurement_associations, proposal_probability)
+
+	def sample_proposal_distr3(self, measurement_lists, total_target_count, 
+							   p_target_deaths, cur_time, measurement_scores):
+		"""
+		Try sampling associations with each measurement sequentially
+		Input:
+		- measurement_lists: type list, measurement_lists[i] is a list of all measurements from the current
+			time instance from the ith measurement source (i.e. different object detection algorithms
+			or different sensors)
+		- measurement_scores: type list, measurement_scores[i] is a list containing scores for every measurement in
+			measurement_list[i]
+		- total_target_count: the number of living targets on the previous time instace
+		- p_target_deaths: a list of length len(total_target_count) where 
+			p_target_deaths[i] = the probability that target i has died between the last
+			time instance and the current time instance
+
+		Output:
+		- targets_to_kill: a list of targets that have been sampled to die (not killed yet)
+		- measurement_associations: type list, measurement_associations[i] is a list of associations for  
+			the measurements in measurement_lists[i]
+		- proposal_probability: proposal probability of the sampled deaths and assocations
+			
+		"""
+		assert(len(measurement_lists) == len(measurement_scores))
+		measurement_associations = []
+		proposal_probability = 1.0
+		for meas_source_index in range(len(measurement_lists)):
+			(cur_associations, cur_proposal_prob) = self.associate_measurements_proposal_distr3\
+				(meas_source_index, measurement_lists[meas_source_index], total_target_count, \
+				 p_target_deaths, measurement_scores[meas_source_index])
+			measurement_associations.append(cur_associations)
+			proposal_probability *= cur_proposal_prob
+
+		assert(len(measurement_associations) == len(measurement_lists))
+
 ############################################################################################################
 		#sample target deaths from unassociated targets
 		unassociated_targets = []
 		unassociated_target_death_probs = []
+
 		for i in range(total_target_count):
-			if(not i in list_of_measurement_associations):
+			target_unassociated = True
+			for meas_source_index in range(len(measurement_associations)):
+				if (i in measurement_associations[meas_source_index]):
+					target_unassociated = False
+			if target_unassociated:
 				unassociated_targets.append(i)
 				unassociated_target_death_probs.append(p_target_deaths[i])
 			else:
@@ -709,12 +909,13 @@ class Particle:
 		assert(proposal_probability != 0.0)
 
 		#debug
-		for i in range(total_target_count):
-			assert(list_of_measurement_associations.count(i) == 0 or \
-				   list_of_measurement_associations.count(i) == 1), (list_of_measurement_associations,  measurement_list, total_target_count, p_target_deaths)
+		for meas_source_index in range(len(measurement_associations)):
+			for i in range(total_target_count):
+				assert(measurement_associations[meas_source_index].count(i) == 0 or \
+					   measurement_associations[meas_source_index].count(i) == 1), (measurement_associations[meas_source_index],  measurement_list, total_target_count, p_target_deaths)
 		#done debug
 
-		return (targets_to_kill, list_of_measurement_associations, proposal_probability, unassociated_target_death_probs)
+		return (targets_to_kill, measurement_associations, proposal_probability, unassociated_target_death_probs)
 
 
 	def sample_target_deaths_proposal3(self, unassociated_targets, cur_time):
@@ -746,13 +947,24 @@ class Particle:
 					probability_of_deaths *= (1 - cur_death_prob)
 		return (targets_to_kill, probability_of_deaths)
 
+	def calc_death_prior(self, living_target_indices, p_target_deaths):
+		death_prior = 1.0
+		for (cur_target_index, cur_target_death_prob) in enumerate(p_target_deaths):
+			if cur_target_index in living_target_indices:
+				death_prior *= (1.0 - cur_target_death_prob)
+				assert((1.0 - cur_target_death_prob) != 0.0), cur_target_death_prob
+			else:
+				death_prior *= cur_target_death_prob
+				assert((cur_target_death_prob) != 0.0), cur_target_death_prob
 
+		return death_prior
 
 	def get_prior(self, living_target_indices, total_target_count, number_measurements, 
 				 measurement_associations, p_target_deaths, target_emission_probs, 
 				 birth_count_priors, clutter_count_priors, measurement_scores, score_intervals):
 		"""
 DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
+		REDOCUMENT
 
 		Input: 
 		- living_target_indices: a list of indices of targets from last time instance that are still alive
@@ -772,17 +984,6 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			clutter_count_prior[i] = the probability of i clutter measurements during 
 			any time instance
 		"""
-		def calc_death_prior(living_target_indices, p_target_deaths):
-			death_prior = 1.0
-			for (cur_target_index, cur_target_death_prob) in enumerate(p_target_deaths):
-				if cur_target_index in living_target_indices:
-					death_prior *= (1.0 - cur_target_death_prob)
-					assert((1.0 - cur_target_death_prob) != 0.0), cur_target_death_prob
-				else:
-					death_prior *= cur_target_death_prob
-					assert((cur_target_death_prob) != 0.0), cur_target_death_prob
-
-			return death_prior
 
 		def nCr(n,r):
 		    return math.factorial(n) / math.factorial(r) / math.factorial(n-r)
@@ -844,7 +1045,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		meas_counts_by_score = [0 for i in range(len(score_intervals))]
 		for i in range(len(measurement_associations)):
 			if measurement_associations[i] != -1 and measurement_associations[i] != total_target_count:
-				index = get_param_index(score_intervals, measurement_scores[i])
+				index = get_score_index(score_intervals, measurement_scores[i])
 				meas_counts_by_score[index] += 1
 
 		#the number of targets we don't observe on this time instance
@@ -855,14 +1056,14 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		birth_counts_by_score = [0 for i in range(len(score_intervals))]
 		for i in range(len(measurement_associations)):
 			if measurement_associations[i] == total_target_count:
-				index = get_param_index(score_intervals, measurement_scores[i])
+				index = get_score_index(score_intervals, measurement_scores[i])
 				birth_counts_by_score[index] += 1
 		#the number of clutter measurements on this time instance
 		clutter_count = measurement_associations.count(-1)
 		clutter_counts_by_score = [0 for i in range(len(score_intervals))]
 		for i in range(len(measurement_associations)):
 			if measurement_associations[i] == -1:
-				index = get_param_index(score_intervals, measurement_scores[i])
+				index = get_score_index(score_intervals, measurement_scores[i])
 				clutter_counts_by_score[index] += 1
 
 		assert(observed_target_count + birth_count + clutter_count == number_measurements),\
@@ -870,7 +1071,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			total_target_count, measurement_associations)
 
 #		assert(len(p_target_deaths) == total_target_count)
-		death_prior = calc_death_prior(living_target_indices, p_target_deaths)
+		death_prior = self.calc_death_prior(living_target_indices, p_target_deaths)
 
 		#the prior probability of this number of measurements with these associations
 		#given these target deaths
@@ -890,16 +1091,27 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 						  
 
 		total_prior = death_prior * assoc_prior
-		assert(total_prior != 0.0), (death_prior, assoc_prior)
-		return total_prior
 
-	def get_exact_prob_hidden_and_data(self, measurement_list, living_target_indices, total_target_count,
+		if total_prior == 0:
+			for i in range(len(score_intervals)):
+				print "for score interval beginning at", score_intervals[i]
+				print "target emmission prob =", target_emission_probs[i]**(meas_counts_by_score[i])
+				print "birth prior=", birth_count_priors[i][birth_counts_by_score[i]] 
+				print "clutter prior=", clutter_count_priors[i][clutter_counts_by_score[i]] 
+
+		assert(total_prior != 0.0), (death_prior, assoc_prior, target_emission_probs, birth_count_priors, clutter_count_priors)
+#		return total_prior
+		return assoc_prior
+
+	def get_exact_prob_hidden_and_data(self, meas_source_index, measurement_list, living_target_indices, total_target_count,
 									   measurement_associations, p_target_deaths, measurement_scores, score_intervals):
 		"""
+		REDOCUMENT, BELOW INCORRECT, not including death probability now
 		Calculate p(data, associations, #measurements, deaths) as:
 		p(data|deaths, associations, #measurements)*p(deaths)*p(associations, #measurements|deaths)
 		Input:
-		- measurement_list: a list of all measurements from the current time instance
+		- measurement_list: a list of all measurements from the current time instance, from the measurement
+			source with index meas_source_index
 		- living_target_indices: a list of indices of targets from last time instance that are still alive
 		- total_target_count: the number of living targets on the previous time instace
 		- measurement_associations: a list of association values for each measurement. Each association has the value
@@ -919,8 +1131,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		"""
 
 		prior = self.get_prior(living_target_indices, total_target_count, len(measurement_list), 
-				 				   measurement_associations, p_target_deaths, target_emission_probs, 
-								   birth_probabilities, clutter_probabilities, measurement_scores, score_intervals)
+				 				   measurement_associations, p_target_deaths, TARGET_EMISSION_PROBS[meas_source_index], 
+								   BIRTH_PROBABILITIES[meas_source_index], CLUTTER_PROBABILITIES[meas_source_index], measurement_scores, score_intervals)
 
 #		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
 #				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
@@ -938,27 +1150,31 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				likelihood *= p_clutter_likelihood
 			else:
 				assert(meas_association >= 0 and meas_association < total_target_count), (meas_association, total_target_count)
-				param_index = get_param_index(score_intervals, measurement_scores[meas_index])
-				likelihood *= self.memoized_assoc_likelihood(measurement_list[meas_index], \
-											   				 meas_association, meas_noise_covs[param_index], param_index)
+				score_index = get_score_index(score_intervals, measurement_scores[meas_index])
+				likelihood *= self.memoized_assoc_likelihood(measurement_list[meas_index], meas_source_index, \
+											   				 meas_association, MEAS_NOISE_COVS[meas_source_index][score_index], score_index)
 
 		assert(prior*likelihood != 0.0), (prior, likelihood)
 
 		return prior*likelihood
 
-	def memoized_assoc_likelihood(self, measurement, target_index, meas_noise_cov, score_index):
+	def memoized_assoc_likelihood(self, measurement, meas_source_index, target_index, meas_noise_cov, score_index):
 		"""
-			When caching likelihoods, we assume that there are never two separate measurements 
-			with identical measurement values and different scores (seems safe)
+			LSVM and regionlets produced two measurements with the same locations (centers), so using the 
+			meas_source_index as part of the key is (sort of) necessary.  Currently also using the score_index, 
+			could possibly be removed (not sure if this would improve speed).
+
+			Currently saving more in the value than necessary (from debugging), can eliminate to improve
+			performance (possibly noticable)
 		"""
 
 
 		global CACHED_LIKELIHOODS
 		global NOT_CACHED_LIKELIHOODS
 		if USE_CONSTANT_R:
-			if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
+			if((measurement[0], measurement[1], target_index, meas_source_index, score_index) in self.assoc_likelihood_cache):
 				CACHED_LIKELIHOODS = CACHED_LIKELIHOODS + 1
-				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
+				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, meas_source_index, score_index)]
 			else:
 				NOT_CACHED_LIKELIHOODS = NOT_CACHED_LIKELIHOODS + 1
 				target = self.targets.living_targets[target_index]
@@ -986,17 +1202,18 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 
 
-				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = assoc_likelihood
+				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, meas_source_index, score_index)] = assoc_likelihood
 				return assoc_likelihood
 
 		else:
-			if((measurement[0], measurement[1], target_index) in self.assoc_likelihood_cache):
+			if((measurement[0], measurement[1], target_index, meas_source_index, score_index) in self.assoc_likelihood_cache):
 #			if((measurement[0], measurement[1], target_index, score_index) in self.assoc_likelihood_cache):
 				CACHED_LIKELIHOODS = CACHED_LIKELIHOODS + 1
 #				return self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)]
 #				(assoc_likelihood, cached_score_index)	= self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)]
-				(assoc_likelihood, cached_score_index, cached_measurement)	= self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)]
-				assert(cached_score_index == score_index), (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
+				(assoc_likelihood, cached_score_index, cached_measurement, cached_meas_source_index) = self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, meas_source_index, score_index)]
+				assert(cached_score_index == score_index), (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov, cached_meas_source_index, meas_source_index)
+				assert(cached_meas_source_index == meas_source_index), (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov, cached_meas_source_index, meas_source_index)
 #				if(cached_score_index != score_index):
 #					print (cached_score_index, score_index, measurement, cached_measurement, target_index, meas_noise_cov)
 #					time.sleep(2)
@@ -1027,7 +1244,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 					assoc_likelihood = LIKELIHOOD_DISTR_NORM*math.exp(a)
 
 #				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, score_index)] = assoc_likelihood
-				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index)] = (assoc_likelihood, score_index, measurement)
+				self.assoc_likelihood_cache[(measurement[0], measurement[1], target_index, meas_source_index, score_index)] = (assoc_likelihood, score_index, measurement, meas_source_index)
 				return assoc_likelihood
 
 	def debug_target_creation(self):
@@ -1038,14 +1255,40 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		print "sampled association c = ", self.c_debug, "importance reweighting factor = ", self.imprt_re_weight_debug
 		self.plot_all_target_locations()
 
+	def process_meas_assoc(self, birth_value, meas_source_index, measurement_associations, measurements, \
+		widths, heights, measurement_scores, cur_time):
+		"""
+		- meas_source_index: the index of the measurement source being processed (i.e. in SCORE_INTERVALS)
+
+		"""
+		for meas_index, meas_assoc in enumerate(measurement_associations):
+			#create new target
+			if(meas_assoc == birth_value):
+				self.create_new_target(measurements[meas_index], widths[meas_index], heights[meas_index], cur_time)
+				new_target = True 
+			#update the target corresponding to the association we have sampled
+			elif((meas_assoc >= 0) and (meas_assoc < birth_value)):
+				assert(meas_source_index >= 0 and meas_source_index < len(SCORE_INTERVALS)), (meas_source_index, len(SCORE_INTERVALS), SCORE_INTERVALS)
+				assert(meas_index >= 0 and meas_index < len(measurement_scores)), (meas_index, len(measurement_scores), measurement_scores)
+				score_index = get_score_index(SCORE_INTERVALS[meas_source_index], measurement_scores[meas_index])
+				self.targets.living_targets[meas_assoc].kf_update(measurements[meas_index], widths[meas_index], \
+					heights[meas_index], cur_time, MEAS_NOISE_COVS[meas_source_index][score_index])
+			else:
+				#otherwise the measurement was associated with clutter
+				assert(meas_assoc == -1), ("meas_assoc = ", meas_assoc)
+
 	#@profile
-	def update_particle_with_measurement(self, measurements, widths, heights, cur_time, measurement_scores):
+	def update_particle_with_measurement(self, cur_time, measurement_lists, widths, heights, measurement_scores):
 		"""
 		Input:
-		-measurements: this is a list of measurement arrays
+		- measurement_lists: a list where measurement_lists[i] is a list of all measurements from the current
+			time instance from the ith measurement source (i.e. different object detection algorithms
+			or different sensors)
+		- measurement_scores: a list where measurement_scores[i] is a list containing scores for every measurement in
+			measurement_list[i]
 		
-		-widths: a list of bounding box widths for every measurement
-		-heights: a list of bounding box heights for every measurement
+		-widths: a list where widths[i] is a list of bounding box widths for the corresponding measurements
+		-heights: a list where heights[i] is a list of bounding box heights for the corresponding measurements
 
 		Debugging output:
 		- new_target: True if a new target was created
@@ -1055,23 +1298,20 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		birth_value = self.targets.living_count
 
 		(measurement_associations, dead_target_indices, imprt_re_weight) = \
-			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurements, cur_time, measurement_scores)
-		assert(len(measurement_associations) == len(measurements))
+			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurement_lists, \
+				cur_time, measurement_scores)
+		assert(len(measurement_associations) == len(measurement_lists))
 		assert(imprt_re_weight != 0.0), imprt_re_weight
 		self.importance_weight *= imprt_re_weight #update particle's importance weight
 		#process measurement associations
-		for meas_index, meas_assoc in enumerate(measurement_associations):
-			#create new target
-			if(meas_assoc == birth_value):
-				self.create_new_target(measurements[meas_index], widths[meas_index], heights[meas_index], cur_time)
-				new_target = True 
-			#update the target corresponding to the association we have sampled
-			elif((meas_assoc >= 0) and (meas_assoc < birth_value)):
-				index = get_param_index(SCORE_INTERVALS, measurement_scores[meas_index])
-				self.targets.living_targets[meas_assoc].kf_update(measurements[meas_index], widths[meas_index], heights[meas_index], cur_time, meas_noise_covs[index])
-			else:
-				#otherwise the measurement was associated with clutter
-				assert(meas_assoc == -1), ("meas_assoc = ", meas_assoc)
+		for meas_source_index in range(len(measurement_associations)):
+			assert(len(measurement_associations[meas_source_index]) == len(measurement_lists[meas_source_index]) and
+				   len(measurement_associations[meas_source_index]) == len(widths[meas_source_index]) and
+				   len(measurement_associations[meas_source_index]) == len(heights[meas_source_index]))
+			self.process_meas_assoc(birth_value, meas_source_index, measurement_associations[meas_source_index], \
+				measurement_lists[meas_source_index], widths[meas_source_index], heights[meas_source_index], \
+				measurement_scores[meas_source_index], cur_time)
+
 		#process target deaths
 		#double check dead_target_indices is sorted
 		assert(all([dead_target_indices[i] <= dead_target_indices[i+1] for i in xrange(len(dead_target_indices)-1)]))
@@ -1081,7 +1321,9 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		#checking if something funny is happening
 		original_num_targets = birth_value
-		num_targets_born = measurement_associations.count(birth_value)
+		num_targets_born = 0
+		for meas_source_index in range(len(measurement_associations)):
+			num_targets_born += measurement_associations[meas_source_index].count(birth_value)
 		num_targets_killed = len(dead_target_indices)
 		assert(self.targets.living_count == original_num_targets + num_targets_born - num_targets_killed)
 		#done checking if something funny is happening
@@ -1128,6 +1370,7 @@ def normalize_importance_weights(particle_set):
 
 
 def perform_resampling(particle_set):
+	print "memory used before resampling: %d" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 	assert(len(particle_set) == N_PARTICLES)
 	weights = []
 	for particle in particle_set:
@@ -1137,7 +1380,10 @@ def perform_resampling(particle_set):
 	new_particles = stratified_resample(weights)
 	new_particle_set = []
 	for index in new_particles:
-		new_particle_set.append(copy.deepcopy(particle_set[index]))
+		if USE_CREATE_CHILD:
+			new_particle_set.append(particle_set[index].create_child())
+		else:
+			new_particle_set.append(copy.deepcopy(particle_set[index]))
 	del particle_set[:]
 	for particle in new_particle_set:
 		particle.importance_weight = 1.0/N_PARTICLES
@@ -1149,6 +1395,7 @@ def perform_resampling(particle_set):
 		weights.append(particle.importance_weight)
 		assert(particle.importance_weight == 1.0/N_PARTICLES)
 	assert(abs(sum(weights) - 1.0) < .01), sum(weights)
+	print "memory used after resampling: %d" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 	#done testing
 
 def display_target_counts(particle_set, cur_time):
@@ -1182,14 +1429,16 @@ def get_eff_num_particles(particle_set):
 
 
 
-def run_rbpf_on_targetset(target_set):
+def run_rbpf_on_targetset(target_sets, online_results_filename):
 	"""
 	Measurement class designed to only have 1 measurement/time instance
 	Input:
-	- target_set: generated TargetSet containing generated measurements and ground truth
+	- target_sets: a list where target_sets[i] is a TargetSet containing measurements from
+		the ith measurement source
 	Output:
 	- max_weight_target_set: TargetSet from a (could be multiple with equal weight) maximum
 		importance weight particle after processing all measurements
+	- number_resamplings: the number of times resampling was performed
 	"""
 	particle_set = []
 	for i in range(0, N_PARTICLES):
@@ -1204,9 +1453,31 @@ def run_rbpf_on_targetset(target_set):
 
 	iter = 1 # for plotting only occasionally
 	number_resamplings = 0
-	for measurement_set in target_set.measurements:
-		time_stamp = measurement_set.time
-		measurements = measurement_set.val
+
+	#sanity check
+	number_time_instances = len(target_sets[0].measurements)
+	for target_set in target_sets:
+		assert(len(target_set.measurements) == number_time_instances)
+
+
+	#the particle with the maximum importance weight on the previous time instance 
+	prv_max_weight_particle = None
+
+	for time_instance_index in range(number_time_instances):
+		time_stamp = target_sets[0].measurements[time_instance_index].time
+		for target_set in target_sets:
+			assert(target_set.measurements[time_instance_index].time == time_stamp)
+#		measurements = measurement_set.val
+
+		measurement_lists = []
+		widths = []
+		heights = []
+		measurement_scores = []
+		for target_set in target_sets:
+			measurement_lists.append(target_set.measurements[time_instance_index].val)
+			widths.append(target_set.measurements[time_instance_index].widths)
+			heights.append(target_set.measurements[time_instance_index].heights)
+			measurement_scores.append(target_set.measurements[time_instance_index].scores)
 
 		print "time_stamp = ", time_stamp, "living target count in first particle = ",\
 		particle_set[0].targets.living_count
@@ -1225,7 +1496,7 @@ def run_rbpf_on_targetset(target_set):
 
 		new_target_list = [] #for debugging, list of booleans whether each particle created a new target
 		for particle in particle_set:
-			new_target = particle.update_particle_with_measurement(measurements, measurement_set.widths, measurement_set.heights, time_stamp, measurement_set.scores)
+			new_target = particle.update_particle_with_measurement(time_stamp, measurement_lists, widths, heights, measurement_scores)
 			new_target_list.append(new_target)
 		normalize_importance_weights(particle_set)
 		#debugging
@@ -1240,9 +1511,9 @@ def run_rbpf_on_targetset(target_set):
 					break
 		#done debugging
 
-		if iter%100 == 0:
-			print iter
-			display_target_counts(particle_set, time_stamp)
+#		if iter%100 == 0:
+#			print iter
+#			display_target_counts(particle_set, time_stamp)
 
 
 		if (get_eff_num_particles(particle_set) < N_PARTICLES/RESAMPLE_RATIO):
@@ -1251,21 +1522,47 @@ def run_rbpf_on_targetset(target_set):
 			number_resamplings += 1
 		prev_time_stamp = time_stamp
 
+		if RUN_ONLINE:
 
+			#find the particle that currently has the largest importance weight
+			max_imprt_weight = -1
+			for particle in particle_set:
+				if(particle.importance_weight > max_imprt_weight):
+					max_imprt_weight = particle.importance_weight
+			cur_max_weight_target_set = None
+			cur_max_weight_particle = None
+			for particle in particle_set:
+				if(particle.importance_weight == max_imprt_weight):
+					cur_max_weight_target_set = particle.targets		
+					cur_max_weight_particle = particle
+
+			if prv_max_weight_particle != None and prv_max_weight_particle != cur_max_weight_particle:
+				target_associations = match_target_ids(cur_max_weight_target_set.living_targets,\
+													   prv_max_weight_particle.targets.living_targets)
+				#replace associated target IDs with the IDs from the previous maximum importance weight
+				#particle for ID conistency in the online results we output
+				for cur_target in cur_max_weight_target_set.living_targets:
+					if cur_target.id_ in target_associations:
+						cur_target.id_ = target_associations[cur_target.id_]
+
+			prv_max_weight_particle = cur_max_weight_particle
+
+			#write current time step's results to results file
+			cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index)
 
 		iter+=1
-
-	print "resampling performed %d times" % number_resamplings
 
 	max_imprt_weight = -1
 	for particle in particle_set:
 		if(particle.importance_weight > max_imprt_weight):
 			max_imprt_weight = particle.importance_weight
+	max_weight_target_set = None
 	for particle in particle_set:
 		if(particle.importance_weight == max_imprt_weight):
 			max_weight_target_set = particle.targets
 
-	return max_weight_target_set
+	run_info = [number_resamplings]
+	return (max_weight_target_set, run_info, number_resamplings)
 
 
 def test_read_write_data_KITTI(target_set):
@@ -1352,55 +1649,539 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	estimated_ts.plot_all_target_locations("Estimated Tracks")      
 	plt.show()
 
-#f = open(MEASURMENT_FILENAME, 'r')
-#measurementTargetSetsBySequence = pickle.load(f)
-#f.close()
-print '-'*80
-print measurementTargetSetsBySequence[0].measurements[0].time
-print measurementTargetSetsBySequence[0].measurements[1].time
-print measurementTargetSetsBySequence[0].measurements[2].time
-print measurementTargetSetsBySequence[0].measurements[3].time
-#estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[0])
-#estimated_ts.write_targets_to_KITTI_format(num_frames = 154, filename = 'rbpf_training_0000_results.txt')
+class KittiTarget:
+	"""
+	Used for computing target associations when outputing online results and the particle with
+	the largest importance weight changes
 
-#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[0])')
+	Values:
+	- x1: smaller x coordinate of bounding box
+	- x2: larger x coordinate of bounding box
+	- y1: smaller y coordinate of bounding box
+	- y2: larger y coordinate of bounding box
+	"""
+	def __init__(self, x1, x2, y1, y2):
+		self.x1 = x1
+		self.x2 = x2
+		self.y1 = y1
+		self.y2 = y2
+
+def boxoverlap(a,b):
+    """
+    	Copied from  KITTI devkit_tracking/python/evaluate_tracking.py
+
+        boxoverlap computes intersection over union for bbox a and b in KITTI format.
+        If the criterion is 'union', overlap = (a inter b) / a union b).
+        If the criterion is 'a', overlap = (a inter b) / a, where b should be a dontcare area.
+    """
+    x1 = max(a.x1, b.x1)
+    y1 = max(a.y1, b.y1)
+    x2 = min(a.x2, b.x2)
+    y2 = min(a.y2, b.y2)
+    
+    w = x2-x1
+    h = y2-y1
+
+    if w<=0. or h<=0.:
+        return 0.
+    inter = w*h
+    aarea = (a.x2-a.x1) * (a.y2-a.y1)
+    barea = (b.x2-b.x1) * (b.y2-b.y1)
+    # intersection over union overlap
+    o = inter / float(aarea+barea-inter)
+    return o
+
+def convert_targets(input_targets):
+	kitti_format_targets = []
+	for cur_target in input_targets:
+		x_pos = cur_target.x[0][0]
+		y_pos = cur_target.x[2][0]
+		width = cur_target.width
+		height = cur_target.height
+
+		left = x_pos - width/2.0
+		top = y_pos - height/2.0
+		right = x_pos + width/2.0
+		bottom = y_pos + height/2.0		
+
+		kitti_format_targets.append(KittiTarget(left, right, top, bottom))
+	return kitti_format_targets
+
+def match_target_ids(particle1_targets, particle2_targets):
+	"""
+	Use the same association as in  KITTI devkit_tracking/python/evaluate_tracking.py
+
+	Inputs:
+	- particle1_targets: a list of targets from particle1
+	- particle2_targets: a list of targets from particle2
+
+	Output:
+	- associations: a dictionary of associations between targets in particle1 and particle2.  
+		associations[particle1_targetID] = particle2_targetID where particle1_targetID and
+		particle2_targetID are IDs of associated targets
+	"""
+	kitti_targets1 = convert_targets(particle1_targets)
+	kitti_targets2 = convert_targets(particle2_targets)
+
+	#if any targets in particle1 have the same ID as a target in particle2,
+	#assign the particle1 target a new ID
+	global NEXT_TARGET_ID
+	p2_target_ids = []
+	for cur_t2 in particle2_targets:
+		p2_target_ids.append(cur_t2.id_)
+	for cur_t1 in particle1_targets:
+		if cur_t1.id_ in p2_target_ids:
+			cur_t1.id_ = NEXT_TARGET_ID
+			NEXT_TARGET_ID += 1
+
+	hm = Munkres()
+	max_cost = 1e9
+	cost_matrix = []
+	for cur_t1 in kitti_targets1:
+		cost_row = []
+		for cur_t2 in kitti_targets2:
+			# overlap == 1 is cost ==0
+			c = 1-boxoverlap(cur_t1,cur_t2)
+			# gating for boxoverlap
+			if c<=.5:
+				cost_row.append(c)
+			else:
+				cost_row.append(max_cost)
+		cost_matrix.append(cost_row)
+
+	if len(kitti_targets1) is 0:
+		cost_matrix=[[]]
+
+	# associate
+	association_matrix = hm.compute(cost_matrix)
+	associations = {}
+	for row,col in association_matrix:
+		c = cost_matrix[row][col]
+		if c < max_cost:
+			associations[particle1_targets[row].id_] = particle2_targets[col].id_
+
+	return associations
 
 
-filename_mapping = "/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/KITTI_helpers/data/evaluate_tracking.seqmap"
-n_frames         = []
-sequence_name    = []
-with open(filename_mapping, "r") as fh:
-    for i,l in enumerate(fh):
-        fields = l.split(" ")
-        sequence_name.append("%04d" % int(fields[0]))
-        n_frames.append(int(fields[3]) - int(fields[2]))
-fh.close() 
-print n_frames
-print sequence_name     
-assert(len(n_frames) == len(sequence_name) and len(n_frames) == len(measurementTargetSetsBySequence))
-#for seq_idx in range(len(measurementTargetSetsBySequence)):
-t0 = time.time()
-for seq_idx in SEQUENCES_TO_PROCESS:
-	print "Processing sequence: ", seq_idx
-	estimated_ts = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-#	estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
-	estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], \
-											   filename = './rbpf_KITTI_results/%s.txt' % sequence_name[seq_idx])
-t1 = time.time()
+if __name__ == "__main__":
+	
+	if RUN_ONLINE:
+		NEXT_TARGET_ID = 0 #all targets have unique IDs, even if they are in different particles
+	
+	# check for correct number of arguments. if user_sha and email are not supplied,
+	# no notification email is sent (this option is used for auto-updates)
+	if len(sys.argv)!=10:
+		print "Supply 9 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
+		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs, seq_idx, peripheral"
+		print "received ", len(sys.argv), " arguments"
+		for i in range(len(sys.argv)):
+			print sys.argv[i]
+		sys.exit(1);
 
-print "Cached likelihoods = ", CACHED_LIKELIHOODS
-print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
-print "RBPF runtime = ", t1-t0
-eval_results('/Users/jkuck/rotation3/Ford-Stanford-Alliance-Stefano-Sneha/jdk_filters/rbpf_KITTI_results', SEQUENCES_TO_PROCESS)
+	N_PARTICLES = int(sys.argv[1])
+	run_idx = int(sys.argv[6]) #the index of this run
+	total_runs = int(sys.argv[7]) #the total number of runs, for checking whether all runs are finished and results should be evaluated
+	seq_idx = int(sys.argv[8]) #the index of the sequence to process
+	peripheral = sys.argv[9] #should we run setup, evaluation, or an actual run?
+
+	if not peripheral in ['setup', 'evaluate', 'run', 'standalone']:
+		print "unexpected peripheral argument"
+		sys.exit(1);
+	else:
+		print "peripheral = ", peripheral
+
+	for i in range(2,6):
+		if(sys.argv[i] != 'True' and sys.argv[i] != 'False'):
+			print "Booleans must be supplied as 'True' or 'False' (without quotes)"
+			sys.exit(1);
 
 
-#test_target_set = test_read_write_data_KITTI(measurementTargetSetsBySequence[0])
-#test_target_set.write_targets_to_KITTI_format(num_frames = 154, filename = 'test_read_write_0000_results.txt')
+	#Should ignored ground truth objects be included when calculating probabilities? (double check specifics)
+	include_ignored_gt = (sys.argv[2] == 'True')
+	include_dontcare_in_gt = (sys.argv[3] == 'True')
+	use_regionlets_and_lsvm = (sys.argv[4] == 'True')
+	sort_dets_on_intervals = (sys.argv[5] == 'True')
 
-#estimated_ts = cProfile.run('run_rbpf_on_targetset(ground_truth_ts)')
 
-#calc_tracking_performance(ground_truth_ts, estimated_ts)
+	DESCRIPTION_OF_RUN = get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
+						   use_regionlets_and_lsvm, sort_dets_on_intervals)
 
+	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
+#	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup3/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
+	results_folder = '%s/%s/%s' % (DIRECTORY_OF_ALL_RESULTS, CUR_EXPERIMENT_BATCH_NAME, results_folder_name)
+
+	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
+	n_frames         = []
+	sequence_name    = []
+	with open(filename_mapping, "r") as fh:
+	    for i,l in enumerate(fh):
+	        fields = l.split(" ")
+	        sequence_name.append("%04d" % int(fields[0]))
+	        n_frames.append(int(fields[3]) - int(fields[2]))
+	fh.close() 
+	print n_frames
+	print sequence_name     
+	assert(len(n_frames) == len(sequence_name))
+
+	if peripheral == 'setup': #create directories
+		print 'begin setup'
+		for cur_run_idx in range(1, total_runs + 1):
+			for cur_seq_idx in SEQUENCES_TO_PROCESS:
+				cur_dir = '%s/results_by_run/run_%d/%s.txt' % (results_folder, cur_run_idx, sequence_name[cur_seq_idx])
+				if not os.path.exists(os.path.dirname(cur_dir)):
+					try:
+						os.makedirs(os.path.dirname(cur_dir))
+					except OSError as exc: # Guard against race condition
+						if exc.errno != errno.EEXIST:
+							raise
+		print 'end setup'
+		sys.exit(0);
+
+	elif peripheral == 'evaluate': #evaluate results from all runs/sequences
+		print 'begin evaluate'
+		#make sure all the runs are complete
+		all_runs_complete = True
+		for cur_run_idx in range(1, total_runs + 1):
+			for cur_seq_idx in SEQUENCES_TO_PROCESS:
+				cur_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, cur_run_idx, cur_seq_idx)
+				if (not os.path.isfile(cur_run_complete_filename)):
+					all_runs_complete = False
+		if all_runs_complete:
+			#evaluate the results when all runs are complete
+			eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+			stdout = sys.stdout
+			sys.stdout = open(eval_metrics_file, 'w')
+
+			runs_completed = eval_results(results_folder + "/results_by_run", SEQUENCES_TO_PROCESS) # + operateor used for string concatenation!
+
+			print "Number of runs completed = ", runs_completed
+			print "Description of run: ", DESCRIPTION_OF_RUN
+			print "Cached likelihoods = ", CACHED_LIKELIHOODS
+			print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+			#print "RBPF runtime (sum of all runs) = ", t1-t0
+			print "USE_CONSTANT_R = ", USE_CONSTANT_R
+			print "number of particles = ", N_PARTICLES
+#			print "score intervals: ", SCORE_INTERVALS
+#			print "run on sequences: ", SEQUENCES_TO_PROCESS
+#			print "number of particles = ", N_PARTICLES
+
+			sys.stdout.close()
+			sys.stdout = stdout
+
+			print "Printing works normally again!"
+
+			#evaluate each sequence independently as well:
+			for cur_seq_idx in SEQUENCES_TO_PROCESS:
+				#evaluate the results when all runs are complete
+				eval_metrics_file = results_folder + '/evaluation_metrics_seq%s.txt' % cur_seq_idx # + operator used for string concatenation!
+				stdout = sys.stdout
+				sys.stdout = open(eval_metrics_file, 'w')
+
+				runs_completed = eval_results(results_folder + "/results_by_run", [cur_seq_idx]) # + operateor used for string concatenation!
+
+				print "Number of runs completed = ", runs_completed
+				print "Description of run: ", DESCRIPTION_OF_RUN
+				print "Cached likelihoods = ", CACHED_LIKELIHOODS
+				print "not cached likelihoods = ", NOT_CACHED_LIKELIHOODS
+				#print "RBPF runtime (sum of all runs) = ", t1-t0
+				print "USE_CONSTANT_R = ", USE_CONSTANT_R
+				print "number of particles = ", N_PARTICLES
+	#			print "score intervals: ", SCORE_INTERVALS
+	#			print "run on sequences: ", SEQUENCES_TO_PROCESS
+	#			print "number of particles = ", N_PARTICLES
+
+		else:
+			#evaluate the results when all runs are complete
+			eval_metrics_file = results_folder + '/evaluation_metrics.txt' # + operator used for string concatenation!
+			stdout = sys.stdout
+			sys.stdout = open(eval_metrics_file, 'w')
+
+			print "Error: all runs not complete"
+
+			sys.stdout.close()
+			sys.stdout = stdout
+
+			print "Printing works normally again!"
+		print 'end evaluate'
+		sys.exit(0);
+
+
+	elif peripheral == 'run':
+		print 'begin run'
+#debug
+		indicate_run_started_filename = '%s/results_by_run/run_%d/seq_%d_started.txt' % (results_folder, run_idx, seq_idx)
+		run_started_f = open(indicate_run_started_filename, 'w')
+		run_started_f.write("This run was started\n")
+		run_started_f.close()
+#end debug
+
+
+		indicate_run_complete_filename = '%s/results_by_run/run_%d/seq_%d_done.txt' % (results_folder, run_idx, seq_idx)
+		#if we haven't already run, run now:
+		if not os.path.isfile(indicate_run_complete_filename):
+
+
+			#False doesn't really make sense because when actually running without ground truth information we don't know
+			#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+			#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+			#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+			#If this occured, it would make sense to try excluding these detections.)
+			include_ignored_detections = True 
+
+			if sort_dets_on_intervals:
+				REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+				LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+		#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
+		#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+			else:
+				REGIONLETS_SCORE_INTERVALS = [2]
+				LSVM_SCORE_INTERVALS = [0]
+
+			#set global variables
+			#global SCORE_INTERVALS
+			#global TARGET_EMISSION_PROBS
+			#global CLUTTER_PROBABILITIES
+			#global BIRTH_PROBABILITIES
+			#global MEAS_NOISE_COVS
+			#global BORDER_DEATH_PROBABILITIES
+			#global NOT_BORDER_DEATH_PROBABILITIES
+
+
+			#train on all training sequences, except the current sequence we are testing on
+			training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
+			#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
+			#training_sequences = [0]
+
+			#use regionlets and lsvm detections
+			if use_regionlets_and_lsvm:
+				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+						include_ignored_detections = include_ignored_detections)
+
+			#only use regionlets detections
+			else: 
+				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
+					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+					include_ignored_detections = include_ignored_detections)
+
+			#print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
+			#print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
+
+			#sleep(5)
+
+			#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+			#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+
+			#BORDER_DEATH_PROBABILITIES = [-99, 0.059085841694537344, 0.3982102908277405, 0.38953488372093026, 0.3611111111111111, 0.4722222222222222]
+			#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.0009339793357071974, 0.006880733944954129, 0.023255813953488372, 0.0481283422459893, 0.006944444444444444]
+
+			assert(len(n_frames) == len(measurementTargetSetsBySequence))
+		#	############DEBUG
+		#	
+		#	print "target emission probs: "
+		#	print TARGET_EMISSION_PROBS
+		#	print "cluter probs: "
+		#	print CLUTTER_PROBABILITIES
+		#	print "birth probs: "
+		#	print BIRTH_PROBABILITIES
+		#	print "Meas noise covs:"
+		#	print MEAS_NOISE_COVS
+		#	print "BORDER_DEATH_PROBABILITIES:"
+		#	print BORDER_DEATH_PROBABILITIES
+		#	print "NOT_BORDER_DEATH_PROBABILITIES:"
+		#	print NOT_BORDER_DEATH_PROBABILITIES
+		#	sleep(5)
+		#	##########DONE DEBUG
+
+			t0 = time.time()
+			info_by_run = [] #list of info from each run
+			cur_run_info = None
+		################	for seq_idx in SEQUENCES_TO_PROCESS:
+			results_filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+
+			print "Processing sequence: ", seq_idx
+			tA = time.time()
+			(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx], results_filename)
+			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+			print "done processing sequence: ", seq_idx
+			
+			tB = time.time()
+			this_seq_run_time = tB - tA
+			cur_seq_info.append(this_seq_run_time)
+			if cur_run_info == None:
+				cur_run_info = cur_seq_info
+			else:
+				assert(len(cur_run_info) == len(cur_seq_info))
+				for info_idx in len(cur_run_info):
+					#assuming for now info can be summed over each sequence in a run!
+					#works for runtime and number of times resampling is performed
+					cur_run_info[info_idx] += cur_seq_info[info_idx]
+
+			print "about to write results"
+
+			if not RUN_ONLINE:
+				estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = results_filename)
+			print "done write results"
+			print "running the rbpf took %f seconds" % (tB-tA)
+		################END	for seq_idx in SEQUENCES_TO_PROCESS:
+			
+			info_by_run.append(cur_run_info)
+			t1 = time.time()
+
+			stdout = sys.stdout
+			sys.stdout = open(indicate_run_complete_filename, 'w')
+
+			print "This run is finished (and this file indicates the fact)\n"
+			print "Resampling was performed %d times\n" % number_resamplings
+			print "This run took %f seconds\n" % (t1-t0)
+
+			print "TARGET_EMISSION_PROBS=", TARGET_EMISSION_PROBS
+			print "CLUTTER_PROBABILITIES=", CLUTTER_PROBABILITIES
+			print "BIRTH_PROBABILITIES=", BIRTH_PROBABILITIES
+			print "MEAS_NOISE_COVS=", MEAS_NOISE_COVS
+			print "BORDER_DEATH_PROBABILITIES=", BORDER_DEATH_PROBABILITIES
+			print "NOT_BORDER_DEATH_PROBABILITIES=", NOT_BORDER_DEATH_PROBABILITIES
+
+
+			sys.stdout.close()
+			sys.stdout = stdout
+
+
+		print 'end run'
+		sys.exit(0);
+
+	else: #peripheral == 'standalone'
+
+		print 'begin standalone run'
+
+		#False doesn't really make sense because when actually running without ground truth information we don't know
+		#whether or not a detection is ignored, but debugging. (An ignored detection is a detection not associated with
+		#a ground truth object that would be associated with a don't care ground truth object if they were included.  It 
+		#can also be a neighobring object type, e.g. "van" instead of "car", but this never seems to occur in the data.
+		#If this occured, it would make sense to try excluding these detections.)
+		include_ignored_detections = True 
+
+		if sort_dets_on_intervals:
+			REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
+			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+	#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
+	#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
+		else:
+			REGIONLETS_SCORE_INTERVALS = [2]
+			LSVM_SCORE_INTERVALS = [0]
+
+		#set global variables
+		#global SCORE_INTERVALS
+		#global TARGET_EMISSION_PROBS
+		#global CLUTTER_PROBABILITIES
+		#global BIRTH_PROBABILITIES
+		#global MEAS_NOISE_COVS
+		#global BORDER_DEATH_PROBABILITIES
+		#global NOT_BORDER_DEATH_PROBABILITIES
+
+
+		#train on all training sequences, except the current sequence we are testing on
+		#training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
+		training_sequences = [i for i in range(21)]
+		#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
+		#training_sequences = [0]
+
+		#use regionlets and lsvm detections
+		if use_regionlets_and_lsvm:
+			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+					LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+					include_ignored_detections = include_ignored_detections)
+
+		#only use regionlets detections
+		else: 
+			SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+			(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+				MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+				get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+				obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
+				include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+				include_ignored_detections = include_ignored_detections)
+
+		print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
+		print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
+
+		sleep(5)
+
+		#BORDER_DEATH_PROBABILITIES = [-99, 0.3290203327171904, 0.5868263473053892, 0.48148148148148145, 0.4375, 0.42424242424242425]
+		#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.05133928571428571, 0.006134969325153374, 0.03468208092485549, 0.025735294117647058, 0.037037037037037035]
+
+		#BORDER_DEATH_PROBABILITIES = [-99, 0.059085841694537344, 0.3982102908277405, 0.38953488372093026, 0.3611111111111111, 0.4722222222222222]
+		#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.0009339793357071974, 0.006880733944954129, 0.023255813953488372, 0.0481283422459893, 0.006944444444444444]
+
+		assert(len(n_frames) == len(measurementTargetSetsBySequence))
+	#	############DEBUG
+	#	
+	#	print "target emission probs: "
+	#	print TARGET_EMISSION_PROBS
+	#	print "cluter probs: "
+	#	print CLUTTER_PROBABILITIES
+	#	print "birth probs: "
+	#	print BIRTH_PROBABILITIES
+	#	print "Meas noise covs:"
+	#	print MEAS_NOISE_COVS
+	#	print "BORDER_DEATH_PROBABILITIES:"
+	#	print BORDER_DEATH_PROBABILITIES
+	#	print "NOT_BORDER_DEATH_PROBABILITIES:"
+	#	print NOT_BORDER_DEATH_PROBABILITIES
+	#	sleep(5)
+	#	##########DONE DEBUG
+
+		t0 = time.time()
+		info_by_run = [] #list of info from each run
+		cur_run_info = None
+	################	for seq_idx in SEQUENCES_TO_PROCESS:
+		filename = './temp_standalone_results.txt'
+
+		print "Processing sequence: ", seq_idx
+		tA = time.time()
+		(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+		#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+		print "done processing sequence: ", seq_idx
+		
+		tB = time.time()
+		this_seq_run_time = tB - tA
+		cur_seq_info.append(this_seq_run_time)
+		if cur_run_info == None:
+			cur_run_info = cur_seq_info
+		else:
+			assert(len(cur_run_info) == len(cur_seq_info))
+			for info_idx in len(cur_run_info):
+				#assuming for now info can be summed over each sequence in a run!
+				#works for runtime and number of times resampling is performed
+				cur_run_info[info_idx] += cur_seq_info[info_idx]
+
+		print "about to write results"
+		estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+		print "done write results"
+		print "running the rbpf took %f seconds" % (tB-tA)
+	################END	for seq_idx in SEQUENCES_TO_PROCESS:
+		
+		info_by_run.append(cur_run_info)
+		t1 = time.time()
+
+
+		print "Resampling was performed %d times\n" % number_resamplings
+		print "This run took %f seconds\n" % (t1-t0)
+
+		print 'end run'
+		sys.exit(0);
 
 
 

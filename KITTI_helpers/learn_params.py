@@ -18,10 +18,12 @@ from learn_Q import Target
 from learn_Q import default_time_step
 import pickle
 
-MIN_SCORE = 0.0 #only consider detections with a score above this value
 
-LEARN_Q_FROM_ALL_GT = True
-SKIP_LEARNING_Q = False
+
+MIN_SCORE = 1.0 #only consider detections with a score above this value
+
+LEARN_Q_FROM_ALL_GT = False
+SKIP_LEARNING_Q = True
 
 CAMERA_PIXEL_WIDTH = 1242
 CAMERA_PIXEL_HEIGHT = 375
@@ -438,6 +440,14 @@ class trackingEvaluation(object):
         #(ground truth objects that have never been seen before)
         birth_count_freq_dict = {}
 
+
+        self.total_clutter_count = 0
+        self.total_gt_object_count = 0
+        self.total_detection_count = 0
+        self.total_true_positive_count = 0
+        self.total_ignored_detection_count = 0
+        self.total_ignored_true_positive_count = 0
+
         #all_associated_gt_ids is a list of all associated ground truth objects in each video sequence
         #all_associated_gt_ids[i] is a list of all associated ground truth objects in the ith video sequence
         #all_associated_gt_ids[i][j] is a list of all associated ground truth objects in the jth frame of the ith video sequence
@@ -521,6 +531,7 @@ class trackingEvaluation(object):
                     meas_height = tt.y2 - tt.y1
                     meas_pos = np.array([(tt.x2 + tt.x1)/2.0, (tt.y2 + tt.y1)/2.0, meas_width, meas_height])
 
+
                     cur_frame_measurements.val.append(meas_pos)
                     cur_frame_measurements.widths.append(meas_width)
                     cur_frame_measurements.heights.append(meas_height)
@@ -557,6 +568,7 @@ class trackingEvaluation(object):
                                                    [(gg.y2 + gg.y1)/2.0],
                                                    [gg.x2 - gg.x1],
                                                    [gg.y2 - gg.y1]])                     
+
                         if (seq_idx, gg.track_id) in self.all_gt_targets_dict:
                             self.all_gt_targets_dict[(seq_idx, gg.track_id)].measurements.append(gt_pos_format2)
                             self.all_gt_targets_dict[(seq_idx, gg.track_id)].measurement_time_stamps.append(f*default_time_step)
@@ -632,6 +644,7 @@ class trackingEvaluation(object):
                                                        [(g[row].y2 + g[row].y1)/2.0],
                                                        [g[row].x2 - g[row].x1],
                                                        [g[row].y2 - g[row].y1]])                     
+
                             if (seq_idx, g[row].track_id) in self.all_gt_targets_dict:
                                 self.all_gt_targets_dict[(seq_idx, g[row].track_id)].measurements.append(gt_pos_format2)
                                 self.all_gt_targets_dict[(seq_idx, g[row].track_id)].measurement_time_stamps.append(f*default_time_step)    
@@ -724,6 +737,13 @@ class trackingEvaluation(object):
                 else:
                     clutter_count_dict[len(t) - tmptp - nignoredtracker - nignoredtp] = 1
 
+
+                self.total_clutter_count += len(t) - tmptp - nignoredtracker - nignoredtp
+                self.total_detection_count += len(t)
+                self.total_true_positive_count += tmptp
+                self.total_ignored_detection_count += nignoredtracker
+                self.total_ignored_true_positive_count += nignoredtp
+                self.total_gt_object_count += tmptp + tmpfn
                 total_target_count += tmptp + tmpfn
                 visible_target_count += tmptp
 
@@ -1017,6 +1037,16 @@ class trackingEvaluation(object):
         mail.msg('-'*80)
         mail.msg("jdk's learned parameters".center(20,"#"))
         mail.msg(self.printEntry("clutter count probabilities: ", self.clutter_count_list))
+
+        mail.msg(self.printEntry("total clutter count: ", self.total_clutter_count))
+
+        mail.msg(self.printEntry("self.total_detection_count: ", self.total_detection_count))
+        mail.msg(self.printEntry("self.total_true_positive_count: ", self.total_true_positive_count))
+        mail.msg(self.printEntry("self.total_ignored_detection_count: ", self.total_ignored_detection_count))
+        mail.msg(self.printEntry("self.total_ignored_true_positive_count: ", self.total_ignored_true_positive_count))
+
+        mail.msg(self.printEntry("total object count: ", self.total_gt_object_count))
+
         mail.msg(self.printEntry("p_target_emission: ", self.p_target_emission))
         mail.msg(self.printEntry("birth count probabilities: ", self.birth_count_list))
         mail.msg(self.printEntry("discontinuous_target_count (should be small!!, ignored when computing death probabilities): ", self.discontinuous_target_count))
