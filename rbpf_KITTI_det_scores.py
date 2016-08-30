@@ -17,6 +17,7 @@ import pickle
 import sys
 import resource
 import errno
+from munkres import Munkres
 
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
@@ -31,18 +32,20 @@ from jdk_helper_evaluate_results import eval_results
 #from proposal2_helper import memoized_birth_clutter_prior
 #from proposal2_helper import sample_birth_clutter_counts
 #from proposal2_helper import sample_target_deaths_proposal2
-#random.seed(5)
-#np.random.seed(seed=5)
+random.seed(5)
+np.random.seed(seed=5)
 
 import cProfile
 import time
 import os
-USE_CREATE_CHILD = True #speed up copying during resampling
-
 from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
 from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
 from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
 from run_experiment_batch_sherlock import get_description_of_run
+
+
+USE_CREATE_CHILD = True #speed up copying during resampling
+RUN_ONLINE = True #save online results 
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
@@ -430,7 +433,12 @@ class TargetSet:
 		return child_target_set
 
 	def create_new_target(self, measurement, width, height, cur_time):
-		new_target = Target(cur_time, self.total_count, np.squeeze(measurement), width, height)
+		if RUN_ONLINE:
+			global NEXT_TARGET_ID
+			new_target = Target(cur_time, NEXT_TARGET_ID, np.squeeze(measurement), width, height)
+			NEXT_TARGET_ID += 1
+		else:
+			new_target = Target(cur_time, self.total_count, np.squeeze(measurement), width, height)
 		self.living_targets.append(new_target)
 		self.all_targets.append(new_target)
 		self.living_count += 1
@@ -502,6 +510,24 @@ class TargetSet:
 
 		every_target = every_target + ancestral_targets # + operator used to concatenate lists!
 		return every_target
+
+
+	def write_online_results(self, online_results_filename, frame_idx):
+		f = open(online_results_filename, "a") #write at end of file
+
+		for target in self.living_targets:
+			assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
+			x_pos = target.all_states[-1][0][0][0]
+			y_pos = target.all_states[-1][0][2][0]
+			width = target.all_states[-1][1]
+			height = target.all_states[-1][2]
+
+			left = x_pos - width/2.0
+			top = y_pos - height/2.0
+			right = x_pos + width/2.0
+			bottom = y_pos + height/2.0		 
+			f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+				(frame_idx, target.id_, left, top, right, bottom))
 
 
 	def write_targets_to_KITTI_format(self, num_frames, filename):
@@ -1354,7 +1380,7 @@ def get_eff_num_particles(particle_set):
 
 
 
-def run_rbpf_on_targetset(target_sets):
+def run_rbpf_on_targetset(target_sets, online_results_filename):
 	"""
 	Measurement class designed to only have 1 measurement/time instance
 	Input:
@@ -1383,6 +1409,10 @@ def run_rbpf_on_targetset(target_sets):
 	number_time_instances = len(target_sets[0].measurements)
 	for target_set in target_sets:
 		assert(len(target_set.measurements) == number_time_instances)
+
+
+	#the particle with the maximum importance weight on the previous time instance 
+	prv_max_weight_particle = None
 
 	for time_instance_index in range(number_time_instances):
 		time_stamp = target_sets[0].measurements[time_instance_index].time
@@ -1443,7 +1473,33 @@ def run_rbpf_on_targetset(target_sets):
 			number_resamplings += 1
 		prev_time_stamp = time_stamp
 
+		if RUN_ONLINE:
 
+			#find the particle that currently has the largest importance weight
+			max_imprt_weight = -1
+			for particle in particle_set:
+				if(particle.importance_weight > max_imprt_weight):
+					max_imprt_weight = particle.importance_weight
+			cur_max_weight_target_set = None
+			cur_max_weight_particle = None
+			for particle in particle_set:
+				if(particle.importance_weight == max_imprt_weight):
+					cur_max_weight_target_set = particle.targets		
+					cur_max_weight_particle = particle
+
+			if prv_max_weight_particle != None and prv_max_weight_particle != cur_max_weight_particle:
+				target_associations = match_target_ids(cur_max_weight_target_set.living_targets,\
+													   prv_max_weight_particle.targets.living_targets)
+				#replace associated target IDs with the IDs from the previous maximum importance weight
+				#particle for ID conistency in the online results we output
+				for cur_target in cur_max_weight_target_set.living_targets:
+					if cur_target.id_ in target_associations:
+						cur_target.id_ = target_associations[cur_target.id_]
+
+			prv_max_weight_particle = cur_max_weight_particle
+
+			#write current time step's results to results file
+			cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index)
 
 		iter+=1
 
@@ -1451,6 +1507,7 @@ def run_rbpf_on_targetset(target_sets):
 	for particle in particle_set:
 		if(particle.importance_weight > max_imprt_weight):
 			max_imprt_weight = particle.importance_weight
+	max_weight_target_set = None
 	for particle in particle_set:
 		if(particle.importance_weight == max_imprt_weight):
 			max_weight_target_set = particle.targets
@@ -1543,8 +1600,124 @@ def calc_tracking_performance(ground_truth_ts, estimated_ts):
 	estimated_ts.plot_all_target_locations("Estimated Tracks")      
 	plt.show()
 
+class KittiTarget:
+	"""
+	Used for computing target associations when outputing online results and the particle with
+	the largest importance weight changes
+
+	Values:
+	- x1: smaller x coordinate of bounding box
+	- x2: larger x coordinate of bounding box
+	- y1: smaller y coordinate of bounding box
+	- y2: larger y coordinate of bounding box
+	"""
+	def __init__(self, x1, x2, y1, y2):
+		self.x1 = x1
+		self.x2 = x2
+		self.y1 = y1
+		self.y2 = y2
+
+def boxoverlap(a,b):
+    """
+    	Copied from  KITTI devkit_tracking/python/evaluate_tracking.py
+
+        boxoverlap computes intersection over union for bbox a and b in KITTI format.
+        If the criterion is 'union', overlap = (a inter b) / a union b).
+        If the criterion is 'a', overlap = (a inter b) / a, where b should be a dontcare area.
+    """
+    x1 = max(a.x1, b.x1)
+    y1 = max(a.y1, b.y1)
+    x2 = min(a.x2, b.x2)
+    y2 = min(a.y2, b.y2)
+    
+    w = x2-x1
+    h = y2-y1
+
+    if w<=0. or h<=0.:
+        return 0.
+    inter = w*h
+    aarea = (a.x2-a.x1) * (a.y2-a.y1)
+    barea = (b.x2-b.x1) * (b.y2-b.y1)
+    # intersection over union overlap
+    o = inter / float(aarea+barea-inter)
+    return o
+
+def convert_targets(input_targets):
+	kitti_format_targets = []
+	for cur_target in input_targets:
+		x_pos = cur_target.x[0][0]
+		y_pos = cur_target.x[2][0]
+		width = cur_target.width
+		height = cur_target.height
+
+		left = x_pos - width/2.0
+		top = y_pos - height/2.0
+		right = x_pos + width/2.0
+		bottom = y_pos + height/2.0		
+
+		kitti_format_targets.append(KittiTarget(left, right, top, bottom))
+	return kitti_format_targets
+
+def match_target_ids(particle1_targets, particle2_targets):
+	"""
+	Use the same association as in  KITTI devkit_tracking/python/evaluate_tracking.py
+
+	Inputs:
+	- particle1_targets: a list of targets from particle1
+	- particle2_targets: a list of targets from particle2
+
+	Output:
+	- associations: a dictionary of associations between targets in particle1 and particle2.  
+		associations[particle1_targetID] = particle2_targetID where particle1_targetID and
+		particle2_targetID are IDs of associated targets
+	"""
+	kitti_targets1 = convert_targets(particle1_targets)
+	kitti_targets2 = convert_targets(particle2_targets)
+
+	#if any targets in particle1 have the same ID as a target in particle2,
+	#assign the particle1 target a new ID
+	global NEXT_TARGET_ID
+	p2_target_ids = []
+	for cur_t2 in particle2_targets:
+		p2_target_ids.append(cur_t2.id_)
+	for cur_t1 in particle1_targets:
+		if cur_t1.id_ in p2_target_ids:
+			cur_t1.id_ = NEXT_TARGET_ID
+			NEXT_TARGET_ID += 1
+
+	hm = Munkres()
+	max_cost = 1e9
+	cost_matrix = []
+	for cur_t1 in kitti_targets1:
+		cost_row = []
+		for cur_t2 in kitti_targets2:
+			# overlap == 1 is cost ==0
+			c = 1-boxoverlap(cur_t1,cur_t2)
+			# gating for boxoverlap
+			if c<=.5:
+				cost_row.append(c)
+			else:
+				cost_row.append(max_cost)
+		cost_matrix.append(cost_row)
+
+	if len(kitti_targets1) is 0:
+		cost_matrix=[[]]
+
+	# associate
+	association_matrix = hm.compute(cost_matrix)
+	associations = {}
+	for row,col in association_matrix:
+		c = cost_matrix[row][col]
+		if c < max_cost:
+			associations[particle1_targets[row].id_] = particle2_targets[col].id_
+
+	return associations
+
 
 if __name__ == "__main__":
+	
+	if RUN_ONLINE:
+		NEXT_TARGET_ID = 0 #all targets have unique IDs, even if they are in different particles
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
@@ -1783,11 +1956,11 @@ if __name__ == "__main__":
 			info_by_run = [] #list of info from each run
 			cur_run_info = None
 		################	for seq_idx in SEQUENCES_TO_PROCESS:
-			filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
+			results_filename = '%s/results_by_run/run_%d/%s.txt' % (results_folder, run_idx, sequence_name[seq_idx])
 
 			print "Processing sequence: ", seq_idx
 			tA = time.time()
-			(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+			(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx], results_filename)
 			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
 			print "done processing sequence: ", seq_idx
 			
@@ -1804,7 +1977,9 @@ if __name__ == "__main__":
 					cur_run_info[info_idx] += cur_seq_info[info_idx]
 
 			print "about to write results"
-			estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = filename)
+
+			if not RUN_ONLINE:
+				estimated_ts.write_targets_to_KITTI_format(num_frames = n_frames[seq_idx], filename = results_filename)
 			print "done write results"
 			print "running the rbpf took %f seconds" % (tB-tA)
 		################END	for seq_idx in SEQUENCES_TO_PROCESS:
