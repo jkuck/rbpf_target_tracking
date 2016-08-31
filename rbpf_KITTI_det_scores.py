@@ -167,8 +167,8 @@ P_default = np.array([[40.64558317, 0, 			 0, 0],
 #from learn_params1, not counting 'ignored' ground truth
 #R_default = np.array([[ 40.64558317,   0.14036472],
 # 					  [  0.14036472,   5.56278505]])
-R_default = np.array([[ 0.0,   0.0],
- 					  [ 0.0,   0.0]])
+R_default = np.array([[ 0.1,   0.0],
+ 					  [ 0.0,   0.1]])
 
 
 #learned from all GT
