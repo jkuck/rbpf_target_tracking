@@ -78,7 +78,7 @@ USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check U
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
@@ -165,8 +165,10 @@ P_default = np.array([[40.64558317, 0, 			 0, 0],
 #R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
 # 					  [ -3.60666228e-02,   1.64772050e+01]])
 #from learn_params1, not counting 'ignored' ground truth
-R_default = np.array([[ 40.64558317,   0.14036472],
- 					  [  0.14036472,   5.56278505]])
+#R_default = np.array([[ 40.64558317,   0.14036472],
+# 					  [  0.14036472,   5.56278505]])
+R_default = np.array([[ 0.0,   0.0],
+ 					  [ 0.0,   0.0]])
 
 
 #learned from all GT
