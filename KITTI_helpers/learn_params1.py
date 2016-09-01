@@ -2354,7 +2354,6 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
 #        doctor_birth_probabilities(birth_probabilities_regionlets)
 #        doctor_birth_probabilities(birth_probabilities_lsvm)
 #
-    assert(type(birth_probabilities_regionlets) == dict and type(birth_probabilities_lsvm) == dict), (type(birth_probabilities_regionlets), type(birth_probabilities_lsvm))
     birth_probabilities = [birth_probabilities_regionlets, birth_probabilities_lsvm]
     print "HELLO#8"
 

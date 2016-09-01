@@ -1062,29 +1062,31 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 					  /count_meas_orderings(number_measurements, observed_target_count, \
 						  					birth_count, clutter_count)
 
-		#number of measurements - number of living targets from the previous time instance
-		meas_lt_diff = number_measurements - total_target_count
-		if meas_lt_diff in BIRTH_PROBABILITIES[meas_source_index][score_index]:
-			mlt_idx = meas_lt_diff
-		#if the measurement-living target difference did not occur in the training data,
-		#find the closest measurement-living target difference that did. In the case of a tie,
-		#pick the one with the smaller absolute value (kind of arbitrary, but assuming that 
-		#there were more training instances with measurement-living target differences closer to zero
-		#so may have had more training data and should discourage extreme values)
-		else:
-			closest_mlt_idx = BIRTH_PROBABILITIES[meas_source_index][score_index].iterkeys().next()
-			for mlt_key in BIRTH_PROBABILITIES[meas_source_index][score_index]:
-				if(abs(meas_lt_diff - mlt_key) < abs(meas_lt_diff - closest_mlt_idx)) or \
-				  (abs(meas_lt_diff - mlt_key) == abs(meas_lt_diff - closest_mlt_idx) and \
-				   abs(mlt_key) < abs(closest_mlt_idx)):
-					closest_mlt_idx = mlt_key
-			mlt_idx = closest_mlt_idx	
-		assert(mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index])
 
-		for i in range(len(score_intervals)):
-			assoc_prior *= target_emission_probs[i]**(meas_counts_by_score[i]) \
-							  *birth_count_priors[i][mlt_idx][birth_counts_by_score[i]] \
-							  *clutter_count_priors[i][mlt_idx][clutter_counts_by_score[i]] \
+
+		for cur_score_index in range(len(score_intervals)):
+			#number of measurements - number of living targets from the previous time instance
+			meas_lt_diff = number_measurements - total_target_count
+			if meas_lt_diff in birth_count_priors[cur_score_index]:
+				mlt_idx = meas_lt_diff
+			#if the measurement-living target difference did not occur in the training data,
+			#find the closest measurement-living target difference that did. In the case of a tie,
+			#pick the one with the smaller absolute value (kind of arbitrary, but assuming that 
+			#there were more training instances with measurement-living target differences closer to zero
+			#so may have had more training data and should discourage extreme values)
+			else:
+				closest_mlt_idx = birth_count_priors[cur_score_index].iterkeys().next()
+				for mlt_key in birth_count_priors[cur_score_index]:
+					if(abs(meas_lt_diff - mlt_key) < abs(meas_lt_diff - closest_mlt_idx)) or \
+					  (abs(meas_lt_diff - mlt_key) == abs(meas_lt_diff - closest_mlt_idx) and \
+					   abs(mlt_key) < abs(closest_mlt_idx)):
+						closest_mlt_idx = mlt_key
+				mlt_idx = closest_mlt_idx	
+			assert(mlt_idx in clutter_count_priors[cur_score_index])
+
+			assoc_prior *= target_emission_probs[cur_score_index]**(meas_counts_by_score[cur_score_index]) \
+							  *birth_count_priors[cur_score_index][mlt_idx][birth_counts_by_score[cur_score_index]] \
+							  *clutter_count_priors[cur_score_index][mlt_idx][clutter_counts_by_score[cur_score_index]] \
 						  
 
 		total_prior = death_prior * assoc_prior
