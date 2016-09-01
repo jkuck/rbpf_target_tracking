@@ -1265,6 +1265,189 @@ class MultiDetections:
                         assert(match_found == True)
 
     def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
+                                            doctor_birth_probs = True, allow_target_rebirth = True):
+        """
+        Input:
+        - min_score_det_1: detections must have score >= min_score_det_1 to be considered
+        - max_score_det_1: detections must have score < max_score_det_1 to be considered
+        - min_score_det_2: detections must have score >= min_score_det_2 to be considered
+        - max_score_det_2: detections must have score < max_score_det_2 to be considered
+        - allow_target_rebirth: boolean, specifies whether ground truth targets are allowed to die and be reborn.
+            In the training data, if ignored ground truth is included, I think there are only two cases where a target
+            dies and is reborn.  I'm not sure if this is an error, but it's small enough to not really make a difference
+            either way.  If ignored ground truths are not included, the number of ground truth objects that die and are 
+            reborn increases, but is still probably small enough to not make much of a difference (would be good to double check!)
+
+        Output:
+        - all_birth_probabilities: all_birth_probabilities[j] is 
+            (number of frames containing j birth measurements with scores in the range [min_score_det_1, max_score_det_1])
+            / (total number of frames)
+            where a "birth measurement" is a measurement of a ground truth target that has not been associated
+            with a detection (of any score value in this AllData instance) on any previous time instance
+        """
+
+        total_frame_count = 0
+        #max_birth_count1[i] = largest number of detection1 births in a single frame with meas_lt_diff of i
+        max_birth_count1 = {}
+        #max_birth_count2[i] = largest number of detection2 births in a single frame with meas_lt_diff of i
+        max_birth_count2 = {}
+        #birth_count_dict[2][5] = 18 means that 18 frames have a meas_lt_diff of 2 and contain 5 birth measurements
+        birth_count_dict_det1 = {}
+        birth_count_dict_det2 = {}
+
+        #meas_lt_diff_frame_count[i] = j means that j frames have a measurement-living target difference of i
+        meas_lt_diff_frame_count = {}
+
+        assert(len(self.det_objects1) == len(self.det_objects2))
+        for seq_idx in self.training_sequences:
+            assert(len(self.det_objects1[seq_idx]) == len(self.det_objects2[seq_idx]))
+
+            #contains ids of all ground truth tracks that have been previously associated with a detection
+            previously_detected_gt_ids = []
+            for frame_idx in range(len(self.det_objects1[seq_idx])):
+                if allow_target_rebirth and frame_idx != 0:
+                    this_frame_gt_ids = []
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                        this_frame_gt_ids.append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx-1])):
+                        cur_gt_id = self.gt_objects[seq_idx][frame_idx-1][gt_idx].track_id
+                        #removed detected gt objects that have died from previously_detected_gt_ids
+                        #to allow for rebirth
+                        if not(cur_gt_id in this_frame_gt_ids) and cur_gt_id in previously_detected_gt_ids:
+                            previously_detected_gt_ids.remove(cur_gt_id)
+                            assert(not cur_gt_id in previously_detected_gt_ids)
+
+
+                total_frame_count += 1
+
+                num_meas = len(self.det_objects1[seq_idx][frame_idx])
+                if frame_idx == 0:
+                    prev_num_living_targets = 0
+                else:    
+                    prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
+                meas_lt_diff = num_meas - prev_num_living_targets
+                if meas_lt_diff in meas_lt_diff_frame_count:
+                    meas_lt_diff_frame_count[meas_lt_diff] += 1
+                else:
+                    meas_lt_diff_frame_count[meas_lt_diff] = 1
+
+
+                cur_frame_birth_count1 = 0
+                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
+                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_1 and \
+                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
+                            cur_frame_birth_count1 += 1
+
+                if (not meas_lt_diff in max_birth_count1) or \
+                   cur_frame_birth_count1 > max_birth_count1[meas_lt_diff]:
+                    max_birth_count1[meas_lt_diff] = cur_frame_birth_count1
+
+
+                if meas_lt_diff in birth_count_dict_det1:
+                    if cur_frame_birth_count1 in birth_count_dict_det1[meas_lt_diff]:
+                        birth_count_dict_det1[meas_lt_diff][cur_frame_birth_count1] += 1
+                    else:
+                        birth_count_dict_det1[meas_lt_diff][cur_frame_birth_count1] = 1
+                else:
+                    birth_count_dict_det1[meas_lt_diff] = {}
+                    birth_count_dict_det1[meas_lt_diff][cur_frame_birth_count1] = 1
+
+
+                cur_frame_birth_count2 = 0
+                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
+                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
+                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_2):
+                            cur_frame_birth_count2 += 1
+
+
+                if (not meas_lt_diff in max_birth_count2) or \
+                   cur_frame_birth_count2 > max_birth_count2[meas_lt_diff]:
+                    max_birth_count2[meas_lt_diff] = cur_frame_birth_count2
+
+
+                if meas_lt_diff in birth_count_dict_det2:
+                    if cur_frame_birth_count2 in birth_count_dict_det2[meas_lt_diff]:
+                        birth_count_dict_det2[meas_lt_diff][cur_frame_birth_count2] += 1
+                    else:
+                        birth_count_dict_det2[meas_lt_diff][cur_frame_birth_count2] = 1
+                else:
+                    birth_count_dict_det2[meas_lt_diff] = {}
+                    birth_count_dict_det2[meas_lt_diff][cur_frame_birth_count2] = 1
+
+
+        all_birth_probabilities_det1 = {}
+        all_birth_probabilities_det2 = {}
+        if not doctor_birth_probs:
+            #detections 1
+            for meas_lt_diff, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                mltDiff_birth_probabilities_det1 = [0 for i in range(max_birth_count1[meas_lt_diff] + 1)]
+                for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
+                all_birth_probabilities_det1[meas_lt_diff] = mltDiff_birth_probabilities_det1
+            #detections 2
+            for meas_lt_diff, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                mltDiff_birth_probabilities_det2 = [0 for i in range(max_birth_count2[meas_lt_diff] + 1)]
+                for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
+                all_birth_probabilities_det2[meas_lt_diff] = mltDiff_birth_probabilities_det2
+
+        #replace 0 probabilities with .0000001/(number of 0 values ) and subtract .0000001 from max probability
+        else: 
+            #detections 1
+            for meas_lt_diff, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                zero_count = max_birth_count1[meas_lt_diff] + 1 - len(mltDiff_birth_count_dict_det1)
+                assert(zero_count>=0)
+                if zero_count == 0:
+                    mltDiff_birth_probabilities_det1 = [0.0 for i in range(max_birth_count1[meas_lt_diff] + 1)]
+                else:
+                    mltDiff_birth_probabilities_det1 = [.0000001/float(zero_count) for i in range(max_birth_count1[meas_lt_diff] + 1)]
+                
+                for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+
+                if not zero_count == 0:
+                    max_prob = max(mltDiff_birth_probabilities_det1)
+                    max_index = mltDiff_birth_probabilities_det1.index(max_prob)
+                    assert(mltDiff_birth_probabilities_det1[max_index] > .001)
+                    mltDiff_birth_probabilities_det1[max_index] -= .0000001
+
+                assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
+                all_birth_probabilities_det1[meas_lt_diff] = mltDiff_birth_probabilities_det1
+
+            #detections 2
+            for meas_lt_diff, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                zero_count = max_birth_count2[meas_lt_diff] + 1 - len(mltDiff_birth_count_dict_det2)
+                assert(zero_count>=0)
+                if zero_count == 0:
+                    mltDiff_birth_probabilities_det2 = [0.0 for i in range(max_birth_count2[meas_lt_diff] + 1)]
+                else:
+                    mltDiff_birth_probabilities_det2 = [.0000001/float(zero_count) for i in range(max_birth_count2[meas_lt_diff] + 1)]
+                
+                for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                
+                if not zero_count == 0:
+                    max_prob = max(mltDiff_birth_probabilities_det2)
+                    max_index = mltDiff_birth_probabilities_det2.index(max_prob)
+                    assert(mltDiff_birth_probabilities_det2[max_index] > .001)
+                    mltDiff_birth_probabilities_det2[max_index] -= .0000001         
+
+                assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
+                all_birth_probabilities_det2[meas_lt_diff] = mltDiff_birth_probabilities_det2
+
+
+        assert (type(all_birth_probabilities_det1) == dict), (type(all_birth_probabilities_det1), all_birth_probabilities_det1)
+        assert (type(all_birth_probabilities_det2) == dict), (type(all_birth_probabilities_det2), all_birth_probabilities_det2)
+        return (all_birth_probabilities_det1, all_birth_probabilities_det2)
+
+
+    def NOT_CONDITIONED_ON_MEAS_LT_DIFF_get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
                                             allow_target_rebirth = True):
         """
         Input:
@@ -1699,84 +1882,106 @@ class AllData:
 
         return p_target_emission
 
-    def get_clutter_probabilities_score_range(self, min_score, max_score, debug=True):
+    def get_clutter_probabilities_score_range(self, min_score, max_score, doctor_clutter_probs = True, debug=True):
         """
         Input:
         - min_score: detections must have score >= min_score to be considered
         - max_score: detections must have score < max_score to be considered
+        - meas_lt_diff: (the number of measurements in the current time instance) - (the number of living
+            targets from the previous time instance)
+        - doctor_clutter_probs: if True, replace 0 probabilities with .0000001/(number of 0 values + 20), extend clutter
+            counts by 20 beyound max_clutter_count, and subtract .0000001 from max probability
+
+        Definition: measurement-living target difference = (the number of measurements in the current time instance) 
+                                                         - (the number of living targets from the previous time instance)
 
         Output:
-        - all_clutter_probabilities: all_clutter_probabilities[j] is 
-            (number of frames containing j clutter measurements with scores in the range [min_score, max_score])
-            / (total number of frames)
+        - all_clutter_probabilities: a dictionary of lists, where all_clutter_probabilities[i][j] is 
+            (number of frames with a measurement-living target difference of i that contain j clutter measurements with
+             scores in the range [min_score, max_score])
+            / (total number of frames with a measurement-living target difference of i)
 
         """
-        if debug:
-            total_frame_count = 0
-            total_detection_count = 0
-            total_clutter_count = 0
-            #largest number of clutter objects in a single frame
-            max_clutter_count = 0
-            #clutter_count_dict[5] = 18 means that 18 frames contain 5 clutter measurements
-            clutter_count_dict = {}
-            for seq_idx in self.training_sequences:
-                for frame_idx in range(len(self.det_objects[seq_idx])):
-                    total_frame_count += 1
-                    cur_frame_clutter_count = 0
-                    for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
-                        total_detection_count += 1
-                        if (self.det_objects[seq_idx][frame_idx][det_idx].assoc == -1 and \
-                            self.det_objects[seq_idx][frame_idx][det_idx].score >= min_score and \
-                            self.det_objects[seq_idx][frame_idx][det_idx].score < max_score):
-                            cur_frame_clutter_count += 1
-                            total_clutter_count += 1
-                    if cur_frame_clutter_count > max_clutter_count:
-                        max_clutter_count = cur_frame_clutter_count
+        total_frame_count = 0
+        total_detection_count = 0
+        total_clutter_count = 0
+        #max_clutter_count[i] is the largest number of clutter objects in a single frame with a
+        #measurement-living target difference of i
+        max_clutter_count = {}
+        #meas_lt_diff_frame_count[i] = j means that j frames have a measurement-living target difference of i
+        meas_lt_diff_frame_count = {}
+        #clutter_count_dict[2][5] = 18 means that 18 frames have a measurement-living target difference of 2
+        #and contain 5 clutter measurements
+        clutter_count_dict = {}
+        for seq_idx in self.training_sequences:
+            for frame_idx in range(len(self.det_objects[seq_idx])):
+                total_frame_count += 1
+                cur_frame_clutter_count = 0
+                num_meas = len(self.det_objects[seq_idx][frame_idx])
+                if frame_idx == 0:
+                    prev_num_living_targets = 0
+                else:    
+                    prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
+                meas_lt_diff = num_meas - prev_num_living_targets
+                if meas_lt_diff in meas_lt_diff_frame_count:
+                    meas_lt_diff_frame_count[meas_lt_diff] += 1
+                else:
+                    meas_lt_diff_frame_count[meas_lt_diff] = 1
+                for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
+                    total_detection_count += 1
+                    if (self.det_objects[seq_idx][frame_idx][det_idx].assoc == -1 and \
+                        self.det_objects[seq_idx][frame_idx][det_idx].score >= min_score and \
+                        self.det_objects[seq_idx][frame_idx][det_idx].score < max_score):
+                        cur_frame_clutter_count += 1
+                        total_clutter_count += 1
 
-                    if cur_frame_clutter_count in clutter_count_dict:
-                        clutter_count_dict[cur_frame_clutter_count] += 1
+                if (not meas_lt_diff in max_clutter_count) or \
+                   cur_frame_clutter_count > max_clutter_count[meas_lt_diff]:
+                    max_clutter_count[meas_lt_diff] = cur_frame_clutter_count 
+
+
+                if meas_lt_diff in clutter_count_dict:
+                    if cur_frame_clutter_count in clutter_count_dict[meas_lt_diff]:
+                        clutter_count_dict[meas_lt_diff][cur_frame_clutter_count] += 1
                     else:
-                        clutter_count_dict[cur_frame_clutter_count] = 1
+                        clutter_count_dict[meas_lt_diff][cur_frame_clutter_count] = 1
+                else:
+                    clutter_count_dict[meas_lt_diff] = {}
+                    clutter_count_dict[meas_lt_diff][cur_frame_clutter_count] = 1
 
-            clutter_probabilities = [0 for i in range(max_clutter_count + 1)]
-            for clutter_count, frequency in clutter_count_dict.iteritems():
-                clutter_probabilities[clutter_count] = float(frequency)/float(total_frame_count)
 
+        clutter_probabilities = {}
+        if not doctor_clutter_probs:
+            for meas_lt_diff, mltDiff_clutter_count_dict in clutter_count_dict.iteritems():
+                mltDiff_clutter_probabilities = [0 for i in range(max_clutter_count[meas_lt_diff] + 1)]
+                for clutter_count, frequency in mltDiff_clutter_count_dict.iteritems():
+                    mltDiff_clutter_probabilities[clutter_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                assert(abs(sum(mltDiff_clutter_probabilities) - 1.0) < .000000001)
+                clutter_probabilities[meas_lt_diff] = mltDiff_clutter_probabilities
+        #replace 0 probabilities with .0000001/(number of 0 values + 20), extend clutter counts by 20 beyound max_clutter_count,
+        #subtract .0000001 from max probability
+        else: 
+            for meas_lt_diff, mltDiff_clutter_count_dict in clutter_count_dict.iteritems():
+                zero_count = max_clutter_count[meas_lt_diff] + 1 - len(mltDiff_clutter_count_dict)
+                assert(zero_count>=0)
+                mltDiff_clutter_probabilities = [.0000001/float(zero_count + 20) for i in range(max_clutter_count[meas_lt_diff] + 1 + 20)]
+                for clutter_count, frequency in mltDiff_clutter_count_dict.iteritems():
+                    mltDiff_clutter_probabilities[clutter_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                max_prob = max(mltDiff_clutter_probabilities)
+                max_index = mltDiff_clutter_probabilities.index(max_prob)
+                assert(mltDiff_clutter_probabilities[max_index] > .001)
+                mltDiff_clutter_probabilities[max_index] -= .0000001
+                assert(abs(sum(mltDiff_clutter_probabilities) - 1.0) < .000000001)
+                clutter_probabilities[meas_lt_diff] = mltDiff_clutter_probabilities
+
+        if debug:
             print '-'*10
             print "get_clutter_probabilities_score_range debug info:"
             print "total_frame_count = ", total_frame_count
             print "total_detection_count = ", total_detection_count
             print "total_clutter_count = ", total_clutter_count
 
-            return clutter_probabilities
-
-        else:
-            total_frame_count = 0
-            #largest number of clutter objects in a single frame
-            max_clutter_count = 0
-            #clutter_count_dict[5] = 18 means that 18 frames contain 5 clutter measurements
-            clutter_count_dict = {}
-            for seq_idx in self.training_sequences:
-                for frame_idx in range(len(self.det_objects[seq_idx])):
-                    total_frame_count += 1
-                    cur_frame_clutter_count = 0
-                    for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
-                        if (self.det_objects[seq_idx][frame_idx][det_idx].assoc == -1 and \
-                            self.det_objects[seq_idx][frame_idx][det_idx].score >= min_score and \
-                            self.det_objects[seq_idx][frame_idx][det_idx].score < max_score):
-                            cur_frame_clutter_count += 1
-                    if cur_frame_clutter_count > max_clutter_count:
-                        max_clutter_count = cur_frame_clutter_count
-
-                    if cur_frame_clutter_count in clutter_count_dict:
-                        clutter_count_dict[cur_frame_clutter_count] += 1
-                    else:
-                        clutter_count_dict[cur_frame_clutter_count] = 1
-
-            clutter_probabilities = [0 for i in range(max_clutter_count + 1)]
-            for clutter_count, frequency in clutter_count_dict.iteritems():
-                clutter_probabilities[clutter_count] = float(frequency)/float(total_frame_count)
-            return clutter_probabilities
+        return clutter_probabilities
 
 
 
@@ -1974,6 +2179,7 @@ class Measurement:
         self.scores = []
         self.time = time
 
+#Now handled in get_clutter_probabilities_score_range
 def doctor_clutter_probabilities(all_clutter_probabilities):
     for i in range(len(all_clutter_probabilities)):
         all_clutter_probabilities[i][0] -= .0000001
@@ -2033,8 +2239,10 @@ def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", 
     clutter_probabilities = apply_function_on_intervals(score_intervals, all_data.get_clutter_probabilities_score_range)
     birth_probabilities = apply_function_on_intervals(score_intervals, all_data.get_birth_probabilities_score_range)
     meas_noise_cov_and_mean = apply_function_on_intervals(score_intervals, all_data.get_R_score_range)
-    if(doctor_clutter_probs):
-        doctor_clutter_probabilities(clutter_probabilities)
+    
+    #Now handled in get_clutter_probabilities_score_range, set to true
+    #if(doctor_clutter_probs):
+    #    doctor_clutter_probabilities(clutter_probabilities)
 
     if(doctor_birth_probs):
         for cur_score_int_birth_probs in birth_probabilities:
@@ -2072,7 +2280,7 @@ def get_meas_target_set(training_sequences, score_intervals, det_method="lsvm", 
 #    pickle.dump(self.measurementTargetSetsBySequence, f)
 #    f.close()  
 
-
+#Now handled in MultiDetections.get_birth_probabilities_score_range
 def doctor_birth_probabilities(birth_probabilities):
     """
     If any birth probability is 0 subtract .0000001 from element 0
@@ -2141,10 +2349,12 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
         lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
 
-    if(doctor_birth_probs):
-        doctor_birth_probabilities(birth_probabilities_regionlets)
-        doctor_birth_probabilities(birth_probabilities_lsvm)
-
+#Now handled in MultiDetections.get_birth_probabilities_score_range
+#    if(doctor_birth_probs):
+#        doctor_birth_probabilities(birth_probabilities_regionlets)
+#        doctor_birth_probabilities(birth_probabilities_lsvm)
+#
+    assert(type(birth_probabilities_regionlets) == dict and type(birth_probabilities_lsvm) == dict), (type(birth_probabilities_regionlets), type(birth_probabilities_lsvm))
     birth_probabilities = [birth_probabilities_regionlets, birth_probabilities_lsvm]
     print "HELLO#8"
 
@@ -2201,11 +2411,13 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
-    if(doctor_birth_probs):
-        doctor_birth_probabilities(birth_probabilities_regionlets)
-        doctor_birth_probabilities(birth_probabilities_lsvm_nonsense)
+#Now handled in MultiDetections.get_birth_probabilities_score_range
+#    if(doctor_birth_probs):
+#        doctor_birth_probabilities(birth_probabilities_regionlets)
+#        doctor_birth_probabilities(birth_probabilities_lsvm_nonsense)
 
 ########## CLEAN THIS UP END
+
     birth_probabilities = [birth_probabilities_regionlets]
     print "HELLO#8"
 

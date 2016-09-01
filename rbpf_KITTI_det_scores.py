@@ -769,16 +769,35 @@ class Particle:
 
 				proposal_distribution_list.append(cur_target_likelihood*cur_target_prior)
 
+			#number of measurements - number of living targets from the previous time instance
+			meas_lt_diff = len(measurement_list) - total_target_count
+			if meas_lt_diff in BIRTH_PROBABILITIES[meas_source_index][score_index]:
+				mlt_idx = meas_lt_diff
+			#if the measurement-living target difference did not occur in the training data,
+			#find the closest measurement-living target difference that did. In the case of a tie,
+			#pick the one with the smaller absolute value (kind of arbitrary, but assuming that 
+			#there were more training instances with measurement-living target differences closer to zero
+			#so may have had more training data and should discourage extreme values)
+			else:
+				closest_mlt_idx = BIRTH_PROBABILITIES[meas_source_index][score_index].iterkeys().next()
+				for mlt_key in BIRTH_PROBABILITIES[meas_source_index][score_index]:
+					if(abs(meas_lt_diff - mlt_key) < abs(meas_lt_diff - closest_mlt_idx)) or \
+					  (abs(meas_lt_diff - mlt_key) == abs(meas_lt_diff - closest_mlt_idx) and \
+					   abs(mlt_key) < abs(closest_mlt_idx)):
+						closest_mlt_idx = mlt_key
+				mlt_idx = closest_mlt_idx	
+			assert(mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index])		
+
 			#compute birth association proposal probability
 			cur_birth_prior = 0.0
-			for i in range(birth_count+1, min(len(BIRTH_PROBABILITIES[meas_source_index][score_index]), remaining_meas_count + birth_count + 1)):
-				cur_birth_prior += BIRTH_PROBABILITIES[meas_source_index][score_index][i]*(i - birth_count)/remaining_meas_count 
+			for i in range(birth_count+1, min(len(BIRTH_PROBABILITIES[meas_source_index][score_index][mlt_idx]), remaining_meas_count + birth_count + 1)):
+				cur_birth_prior += BIRTH_PROBABILITIES[meas_source_index][score_index][mlt_idx][i]*(i - birth_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_birth_prior*p_birth_likelihood)
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
-			for i in range(clutter_count+1, min(len(CLUTTER_PROBABILITIES[meas_source_index][score_index]), remaining_meas_count + clutter_count + 1)):
-				cur_clutter_prior += CLUTTER_PROBABILITIES[meas_source_index][score_index][i]*(i - clutter_count)/remaining_meas_count 
+			for i in range(clutter_count+1, min(len(CLUTTER_PROBABILITIES[meas_source_index][score_index][mlt_idx]), remaining_meas_count + clutter_count + 1)):
+				cur_clutter_prior += CLUTTER_PROBABILITIES[meas_source_index][score_index][mlt_idx][i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
@@ -1042,10 +1061,30 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		assoc_prior = (p_target_does_not_emit)**(unobserved_target_count) \
 					  /count_meas_orderings(number_measurements, observed_target_count, \
 						  					birth_count, clutter_count)
+
+		#number of measurements - number of living targets from the previous time instance
+		meas_lt_diff = number_measurements - total_target_count
+		if meas_lt_diff in BIRTH_PROBABILITIES[meas_source_index][score_index]:
+			mlt_idx = meas_lt_diff
+		#if the measurement-living target difference did not occur in the training data,
+		#find the closest measurement-living target difference that did. In the case of a tie,
+		#pick the one with the smaller absolute value (kind of arbitrary, but assuming that 
+		#there were more training instances with measurement-living target differences closer to zero
+		#so may have had more training data and should discourage extreme values)
+		else:
+			closest_mlt_idx = BIRTH_PROBABILITIES[meas_source_index][score_index].iterkeys().next()
+			for mlt_key in BIRTH_PROBABILITIES[meas_source_index][score_index]:
+				if(abs(meas_lt_diff - mlt_key) < abs(meas_lt_diff - closest_mlt_idx)) or \
+				  (abs(meas_lt_diff - mlt_key) == abs(meas_lt_diff - closest_mlt_idx) and \
+				   abs(mlt_key) < abs(closest_mlt_idx)):
+					closest_mlt_idx = mlt_key
+			mlt_idx = closest_mlt_idx	
+		assert(mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index])
+
 		for i in range(len(score_intervals)):
 			assoc_prior *= target_emission_probs[i]**(meas_counts_by_score[i]) \
-							  *birth_count_priors[i][birth_counts_by_score[i]] \
-							  *clutter_count_priors[i][clutter_counts_by_score[i]] \
+							  *birth_count_priors[i][mlt_idx][birth_counts_by_score[i]] \
+							  *clutter_count_priors[i][mlt_idx][clutter_counts_by_score[i]] \
 						  
 
 		total_prior = death_prior * assoc_prior
@@ -1054,8 +1093,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			for i in range(len(score_intervals)):
 				print "for score interval beginning at", score_intervals[i]
 				print "target emmission prob =", target_emission_probs[i]**(meas_counts_by_score[i])
-				print "birth prior=", birth_count_priors[i][birth_counts_by_score[i]] 
-				print "clutter prior=", clutter_count_priors[i][clutter_counts_by_score[i]] 
+				print "birth prior=", birth_count_priors[i][mlt_idx][birth_counts_by_score[i]] 
+				print "clutter prior=", clutter_count_priors[i][mlt_idx][clutter_counts_by_score[i]] 
 
 		assert(total_prior != 0.0), (death_prior, assoc_prior, target_emission_probs, birth_count_priors, clutter_count_priors)
 #		return total_prior
