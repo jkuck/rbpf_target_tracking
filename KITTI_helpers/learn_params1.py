@@ -1331,11 +1331,11 @@ class MultiDetections:
                     birth_count_dict_det1[cur_frame_birth_count1] = 1
 
                 cur_frame_birth_count2 = 0
-                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
-                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
-                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
-                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
-                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_2):
+                for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
+                    if (not self.det_objects2[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects2[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects2[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
+                            self.det_objects2[seq_idx][frame_idx][det_idx].score < max_score_det_2):
                             cur_frame_birth_count2 += 1
                 if cur_frame_birth_count2 > max_birth_count2:
                     max_birth_count2 = cur_frame_birth_count2
