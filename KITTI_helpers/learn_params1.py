@@ -1296,7 +1296,8 @@ class MultiDetections:
         birth_count_dict_det2 = {}
 
         #meas_lt_diff_frame_count[i] = j means that j frames have a measurement-living target difference of i
-        meas_lt_diff_frame_count = {}
+        meas_lt_diff_frame_count1 = {}
+        meas_lt_diff_frame_count2 = {}
 
         assert(len(self.det_objects1) == len(self.det_objects2))
         for seq_idx in self.training_sequences:
@@ -1320,16 +1321,17 @@ class MultiDetections:
 
                 total_frame_count += 1
 
-                num_meas = len(self.det_objects1[seq_idx][frame_idx])
+                #detections1
+                num_meas1 = len(self.det_objects1[seq_idx][frame_idx])
                 if frame_idx == 0:
                     prev_num_living_targets = 0
                 else:    
                     prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
-                meas_lt_diff = num_meas - prev_num_living_targets
-                if meas_lt_diff in meas_lt_diff_frame_count:
-                    meas_lt_diff_frame_count[meas_lt_diff] += 1
+                meas_lt_diff1 = num_meas1 - prev_num_living_targets
+                if meas_lt_diff1 in meas_lt_diff_frame_count1:
+                    meas_lt_diff_frame_count1[meas_lt_diff1] += 1
                 else:
-                    meas_lt_diff_frame_count[meas_lt_diff] = 1
+                    meas_lt_diff_frame_count1[meas_lt_diff1] = 1
 
 
                 cur_frame_birth_count1 = 0
@@ -1340,76 +1342,88 @@ class MultiDetections:
                             self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
                             cur_frame_birth_count1 += 1
 
-                if (not meas_lt_diff in max_birth_count1) or \
-                   cur_frame_birth_count1 > max_birth_count1[meas_lt_diff]:
-                    max_birth_count1[meas_lt_diff] = cur_frame_birth_count1
+                if (not meas_lt_diff1 in max_birth_count1) or \
+                   cur_frame_birth_count1 > max_birth_count1[meas_lt_diff1]:
+                    max_birth_count1[meas_lt_diff1] = cur_frame_birth_count1
 
 
-                if meas_lt_diff in birth_count_dict_det1:
-                    if cur_frame_birth_count1 in birth_count_dict_det1[meas_lt_diff]:
-                        birth_count_dict_det1[meas_lt_diff][cur_frame_birth_count1] += 1
+                if meas_lt_diff1 in birth_count_dict_det1:
+                    if cur_frame_birth_count1 in birth_count_dict_det1[meas_lt_diff1]:
+                        birth_count_dict_det1[meas_lt_diff1][cur_frame_birth_count1] += 1
                     else:
-                        birth_count_dict_det1[meas_lt_diff][cur_frame_birth_count1] = 1
+                        birth_count_dict_det1[meas_lt_diff1][cur_frame_birth_count1] = 1
                 else:
-                    birth_count_dict_det1[meas_lt_diff] = {}
-                    birth_count_dict_det1[meas_lt_diff][cur_frame_birth_count1] = 1
+                    birth_count_dict_det1[meas_lt_diff1] = {}
+                    birth_count_dict_det1[meas_lt_diff1][cur_frame_birth_count1] = 1
 
+
+                #detections2
+                num_meas2 = len(self.det_objects2[seq_idx][frame_idx])
+                if frame_idx == 0:
+                    prev_num_living_targets = 0
+                else:    
+                    prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
+                meas_lt_diff2 = num_meas2 - prev_num_living_targets
+                if meas_lt_diff2 in meas_lt_diff_frame_count2:
+                    meas_lt_diff_frame_count2[meas_lt_diff2] += 1
+                else:
+                    meas_lt_diff_frame_count2[meas_lt_diff2] = 1
 
                 cur_frame_birth_count2 = 0
-                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
-                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
-                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
-                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
-                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_2):
+                for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
+                    if (not self.det_objects2[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects2[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects2[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
+                            self.det_objects2[seq_idx][frame_idx][det_idx].score < max_score_det_2):
                             cur_frame_birth_count2 += 1
 
 
-                if (not meas_lt_diff in max_birth_count2) or \
-                   cur_frame_birth_count2 > max_birth_count2[meas_lt_diff]:
-                    max_birth_count2[meas_lt_diff] = cur_frame_birth_count2
+                if (not meas_lt_diff2 in max_birth_count2) or \
+                   cur_frame_birth_count2 > max_birth_count2[meas_lt_diff2]:
+                    max_birth_count2[meas_lt_diff2] = cur_frame_birth_count2
 
 
-                if meas_lt_diff in birth_count_dict_det2:
-                    if cur_frame_birth_count2 in birth_count_dict_det2[meas_lt_diff]:
-                        birth_count_dict_det2[meas_lt_diff][cur_frame_birth_count2] += 1
+                if meas_lt_diff2 in birth_count_dict_det2:
+                    if cur_frame_birth_count2 in birth_count_dict_det2[meas_lt_diff2]:
+                        birth_count_dict_det2[meas_lt_diff2][cur_frame_birth_count2] += 1
                     else:
-                        birth_count_dict_det2[meas_lt_diff][cur_frame_birth_count2] = 1
+                        birth_count_dict_det2[meas_lt_diff2][cur_frame_birth_count2] = 1
                 else:
-                    birth_count_dict_det2[meas_lt_diff] = {}
-                    birth_count_dict_det2[meas_lt_diff][cur_frame_birth_count2] = 1
+                    birth_count_dict_det2[meas_lt_diff2] = {}
+                    birth_count_dict_det2[meas_lt_diff2][cur_frame_birth_count2] = 1
 
 
         all_birth_probabilities_det1 = {}
         all_birth_probabilities_det2 = {}
         if not doctor_birth_probs:
             #detections 1
-            for meas_lt_diff, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
-                mltDiff_birth_probabilities_det1 = [0 for i in range(max_birth_count1[meas_lt_diff] + 1)]
+            for meas_lt_diff1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                mltDiff_birth_probabilities_det1 = [0 for i in range(max_birth_count1[meas_lt_diff1] + 1)]
                 for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
-                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count1[meas_lt_diff1])
                 assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
-                all_birth_probabilities_det1[meas_lt_diff] = mltDiff_birth_probabilities_det1
+                all_birth_probabilities_det1[meas_lt_diff1] = mltDiff_birth_probabilities_det1
             #detections 2
-            for meas_lt_diff, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
-                mltDiff_birth_probabilities_det2 = [0 for i in range(max_birth_count2[meas_lt_diff] + 1)]
+            for meas_lt_diff2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                mltDiff_birth_probabilities_det2 = [0 for i in range(max_birth_count2[meas_lt_diff2] + 1)]
                 for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
-                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count2[meas_lt_diff2])
                 assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
-                all_birth_probabilities_det2[meas_lt_diff] = mltDiff_birth_probabilities_det2
+                all_birth_probabilities_det2[meas_lt_diff2] = mltDiff_birth_probabilities_det2
 
         #replace 0 probabilities with .0000001/(number of 0 values ) and subtract .0000001 from max probability
         else: 
             #detections 1
-            for meas_lt_diff, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
-                zero_count = max_birth_count1[meas_lt_diff] + 1 - len(mltDiff_birth_count_dict_det1)
+            for meas_lt_diff1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                zero_count = max_birth_count1[meas_lt_diff1] + 1 - len(mltDiff_birth_count_dict_det1)
                 assert(zero_count>=0)
                 if zero_count == 0:
-                    mltDiff_birth_probabilities_det1 = [0.0 for i in range(max_birth_count1[meas_lt_diff] + 1)]
+                    mltDiff_birth_probabilities_det1 = [0.0 for i in range(max_birth_count1[meas_lt_diff1] + 1)]
                 else:
-                    mltDiff_birth_probabilities_det1 = [.0000001/float(zero_count) for i in range(max_birth_count1[meas_lt_diff] + 1)]
+                    mltDiff_birth_probabilities_det1 = [.0000001/float(zero_count) for i in range(max_birth_count1[meas_lt_diff1] + 1)]
                 
                 for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
-                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count1[meas_lt_diff1])
 
                 if not zero_count == 0:
                     max_prob = max(mltDiff_birth_probabilities_det1)
@@ -1418,19 +1432,19 @@ class MultiDetections:
                     mltDiff_birth_probabilities_det1[max_index] -= .0000001
 
                 assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
-                all_birth_probabilities_det1[meas_lt_diff] = mltDiff_birth_probabilities_det1
+                all_birth_probabilities_det1[meas_lt_diff1] = mltDiff_birth_probabilities_det1
 
             #detections 2
-            for meas_lt_diff, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
-                zero_count = max_birth_count2[meas_lt_diff] + 1 - len(mltDiff_birth_count_dict_det2)
+            for meas_lt_diff2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                zero_count = max_birth_count2[meas_lt_diff2] + 1 - len(mltDiff_birth_count_dict_det2)
                 assert(zero_count>=0)
                 if zero_count == 0:
-                    mltDiff_birth_probabilities_det2 = [0.0 for i in range(max_birth_count2[meas_lt_diff] + 1)]
+                    mltDiff_birth_probabilities_det2 = [0.0 for i in range(max_birth_count2[meas_lt_diff2] + 1)]
                 else:
-                    mltDiff_birth_probabilities_det2 = [.0000001/float(zero_count) for i in range(max_birth_count2[meas_lt_diff] + 1)]
+                    mltDiff_birth_probabilities_det2 = [.0000001/float(zero_count) for i in range(max_birth_count2[meas_lt_diff2] + 1)]
                 
                 for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
-                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count2[meas_lt_diff2])
                 
                 if not zero_count == 0:
                     max_prob = max(mltDiff_birth_probabilities_det2)
@@ -1439,7 +1453,7 @@ class MultiDetections:
                     mltDiff_birth_probabilities_det2[max_index] -= .0000001         
 
                 assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
-                all_birth_probabilities_det2[meas_lt_diff] = mltDiff_birth_probabilities_det2
+                all_birth_probabilities_det2[meas_lt_diff2] = mltDiff_birth_probabilities_det2
 
 
         assert (type(all_birth_probabilities_det1) == dict), (type(all_birth_probabilities_det1), all_birth_probabilities_det1)

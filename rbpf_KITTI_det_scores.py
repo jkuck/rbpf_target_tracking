@@ -786,6 +786,18 @@ class Particle:
 					   abs(mlt_key) < abs(closest_mlt_idx)):
 						closest_mlt_idx = mlt_key
 				mlt_idx = closest_mlt_idx	
+
+
+#			if not mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index]:
+#				print "CLUTTER_PROBABILITIES[meas_source_index][score_index]:"
+#				print CLUTTER_PROBABILITIES[meas_source_index][score_index]
+#				print "BIRTH_PROBABILITIES[meas_source_index][score_index]:"
+#				print BIRTH_PROBABILITIES[meas_source_index][score_index]
+			#print "CLUTTER_PROBABILITIES:"
+			#print CLUTTER_PROBABILITIES
+			#print "BIRTH_PROBABILITIES:"
+			#print BIRTH_PROBABILITIES
+			#sleep(5)
 			assert(mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index])		
 
 			#compute birth association proposal probability
