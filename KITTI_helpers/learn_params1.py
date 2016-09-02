@@ -21,7 +21,7 @@ import pickle
 
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
-
+BIRTH_CLUTTER_MARKOV_ORDER = 1
 #load ground truth data and detection data, when available, from saved pickle file
 #to cut down on load time
 USE_PICKLED_DATA = True
@@ -1265,7 +1265,7 @@ class MultiDetections:
                         assert(match_found == True)
 
     def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
-                                            doctor_birth_probs = True, allow_target_rebirth = True):
+                                            m = BIRTH_CLUTTER_MARKOV_ORDER, doctor_birth_probs = True, allow_target_rebirth = True):
         """
         Input:
         - min_score_det_1: detections must have score >= min_score_det_1 to be considered
@@ -1277,6 +1277,21 @@ class MultiDetections:
             dies and is reborn.  I'm not sure if this is an error, but it's small enough to not really make a difference
             either way.  If ignored ground truths are not included, the number of ground truth objects that die and are 
             reborn increases, but is still probably small enough to not make much of a difference (would be good to double check!)
+        - m: order of the Markov chain. Clutter probabilities are dependent on the number of living targets
+            m time instances in the past and the number of measurements 0, 1,..., to m time instances in the past
+
+         - m: order of the Markov chain. Clutter probabilities are dependent on the number of living targets
+            m time instances in the past and the number of measurements 0, 1,..., to m-1 time instances in the past
+
+        We index probabilities by the markovHistory of the current state, where the markovHistory is the list:
+        [(#measurements m-1 time instances ago) - (# living targets m time instances ago),
+         .
+         .
+         .
+         (#measurements 0 time instances ago or at the current time) - (# living targets m time instances ago)]
+
+        If the frame_idx is less than m, we replace missing markovHistory list values with float("inf")
+
 
         Output:
         - all_birth_probabilities: all_birth_probabilities[j] is 
@@ -1287,17 +1302,17 @@ class MultiDetections:
         """
 
         total_frame_count = 0
-        #max_birth_count1[i] = largest number of detection1 births in a single frame with meas_lt_diff of i
+        #max_birth_count1[list_i] = largest number of detection1 births in a single frame with a markovHistory of list_i
         max_birth_count1 = {}
-        #max_birth_count2[i] = largest number of detection2 births in a single frame with meas_lt_diff of i
+        #max_birth_count2[list_i] = largest number of detection2 births in a single frame with a markovHistory of list_i
         max_birth_count2 = {}
-        #birth_count_dict[2][5] = 18 means that 18 frames have a meas_lt_diff of 2 and contain 5 birth measurements
+        #birth_count_dict[list_i][5] = 18 means that 18 frames have a markovHistory of list_i and contain 5 birth measurements
         birth_count_dict_det1 = {}
         birth_count_dict_det2 = {}
 
-        #meas_lt_diff_frame_count[i] = j means that j frames have a measurement-living target difference of i
-        meas_lt_diff_frame_count1 = {}
-        meas_lt_diff_frame_count2 = {}
+        #markov_history_frame_count[list_i] = j means that j frames have a markovHistory of list_i
+        markov_history_frame_count1 = {}
+        markov_history_frame_count2 = {}
 
         assert(len(self.det_objects1) == len(self.det_objects2))
         for seq_idx in self.training_sequences:
@@ -1306,32 +1321,19 @@ class MultiDetections:
             #contains ids of all ground truth tracks that have been previously associated with a detection
             previously_detected_gt_ids = []
             for frame_idx in range(len(self.det_objects1[seq_idx])):
-                if allow_target_rebirth and frame_idx != 0:
-                    this_frame_gt_ids = []
-                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
-                        this_frame_gt_ids.append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
-                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx-1])):
-                        cur_gt_id = self.gt_objects[seq_idx][frame_idx-1][gt_idx].track_id
-                        #removed detected gt objects that have died from previously_detected_gt_ids
-                        #to allow for rebirth
-                        if not(cur_gt_id in this_frame_gt_ids) and cur_gt_id in previously_detected_gt_ids:
-                            previously_detected_gt_ids.remove(cur_gt_id)
-                            assert(not cur_gt_id in previously_detected_gt_ids)
-
+                if frame_idx >= m:
+                    previously_detected_gt_ids = []
+                    for gt_object in self.gt_objects[seq_idx][frame_idx-m]:
+                        previously_detected_gt_ids.append(gt_object.track_id)
 
                 total_frame_count += 1
 
                 #detections1
-                num_meas1 = len(self.det_objects1[seq_idx][frame_idx])
-                if frame_idx == 0:
-                    prev_num_living_targets = 0
-                else:    
-                    prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
-                meas_lt_diff1 = num_meas1 - prev_num_living_targets
-                if meas_lt_diff1 in meas_lt_diff_frame_count1:
-                    meas_lt_diff_frame_count1[meas_lt_diff1] += 1
+                markovHistory1 = tuple(get_markov_history(self.gt_objects, self.det_objects1, seq_idx, frame_idx, m))
+                if markovHistory1 in markov_history_frame_count1:
+                    markov_history_frame_count1[markovHistory1] += 1
                 else:
-                    meas_lt_diff_frame_count1[meas_lt_diff1] = 1
+                    markov_history_frame_count1[markovHistory1] = 1
 
 
                 cur_frame_birth_count1 = 0
@@ -1342,32 +1344,27 @@ class MultiDetections:
                             self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
                             cur_frame_birth_count1 += 1
 
-                if (not meas_lt_diff1 in max_birth_count1) or \
-                   cur_frame_birth_count1 > max_birth_count1[meas_lt_diff1]:
-                    max_birth_count1[meas_lt_diff1] = cur_frame_birth_count1
+                if (not markovHistory1 in max_birth_count1) or \
+                   cur_frame_birth_count1 > max_birth_count1[markovHistory1]:
+                    max_birth_count1[markovHistory1] = cur_frame_birth_count1
 
 
-                if meas_lt_diff1 in birth_count_dict_det1:
-                    if cur_frame_birth_count1 in birth_count_dict_det1[meas_lt_diff1]:
-                        birth_count_dict_det1[meas_lt_diff1][cur_frame_birth_count1] += 1
+                if markovHistory1 in birth_count_dict_det1:
+                    if cur_frame_birth_count1 in birth_count_dict_det1[markovHistory1]:
+                        birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] += 1
                     else:
-                        birth_count_dict_det1[meas_lt_diff1][cur_frame_birth_count1] = 1
+                        birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] = 1
                 else:
-                    birth_count_dict_det1[meas_lt_diff1] = {}
-                    birth_count_dict_det1[meas_lt_diff1][cur_frame_birth_count1] = 1
+                    birth_count_dict_det1[markovHistory1] = {}
+                    birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] = 1
 
 
                 #detections2
-                num_meas2 = len(self.det_objects2[seq_idx][frame_idx])
-                if frame_idx == 0:
-                    prev_num_living_targets = 0
-                else:    
-                    prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
-                meas_lt_diff2 = num_meas2 - prev_num_living_targets
-                if meas_lt_diff2 in meas_lt_diff_frame_count2:
-                    meas_lt_diff_frame_count2[meas_lt_diff2] += 1
+                markovHistory2 = tuple(get_markov_history(self.gt_objects, self.det_objects2, seq_idx, frame_idx, m))
+                if markovHistory2 in markov_history_frame_count2:
+                    markov_history_frame_count2[markovHistory2] += 1
                 else:
-                    meas_lt_diff_frame_count2[meas_lt_diff2] = 1
+                    markov_history_frame_count2[markovHistory2] = 1
 
                 cur_frame_birth_count2 = 0
                 for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
@@ -1378,52 +1375,52 @@ class MultiDetections:
                             cur_frame_birth_count2 += 1
 
 
-                if (not meas_lt_diff2 in max_birth_count2) or \
-                   cur_frame_birth_count2 > max_birth_count2[meas_lt_diff2]:
-                    max_birth_count2[meas_lt_diff2] = cur_frame_birth_count2
+                if (not markovHistory2 in max_birth_count2) or \
+                   cur_frame_birth_count2 > max_birth_count2[markovHistory2]:
+                    max_birth_count2[markovHistory2] = cur_frame_birth_count2
 
 
-                if meas_lt_diff2 in birth_count_dict_det2:
-                    if cur_frame_birth_count2 in birth_count_dict_det2[meas_lt_diff2]:
-                        birth_count_dict_det2[meas_lt_diff2][cur_frame_birth_count2] += 1
+                if markovHistory2 in birth_count_dict_det2:
+                    if cur_frame_birth_count2 in birth_count_dict_det2[markovHistory2]:
+                        birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] += 1
                     else:
-                        birth_count_dict_det2[meas_lt_diff2][cur_frame_birth_count2] = 1
+                        birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] = 1
                 else:
-                    birth_count_dict_det2[meas_lt_diff2] = {}
-                    birth_count_dict_det2[meas_lt_diff2][cur_frame_birth_count2] = 1
+                    birth_count_dict_det2[markovHistory2] = {}
+                    birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] = 1
 
 
         all_birth_probabilities_det1 = {}
         all_birth_probabilities_det2 = {}
         if not doctor_birth_probs:
             #detections 1
-            for meas_lt_diff1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
-                mltDiff_birth_probabilities_det1 = [0 for i in range(max_birth_count1[meas_lt_diff1] + 1)]
+            for markovHistory1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                mltDiff_birth_probabilities_det1 = [0 for i in range(max_birth_count1[markovHistory1] + 1)]
                 for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
-                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count1[meas_lt_diff1])
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(markov_history_frame_count1[markovHistory1])
                 assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
-                all_birth_probabilities_det1[meas_lt_diff1] = mltDiff_birth_probabilities_det1
+                all_birth_probabilities_det1[markovHistory1] = mltDiff_birth_probabilities_det1
             #detections 2
-            for meas_lt_diff2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
-                mltDiff_birth_probabilities_det2 = [0 for i in range(max_birth_count2[meas_lt_diff2] + 1)]
+            for markovHistory2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                mltDiff_birth_probabilities_det2 = [0 for i in range(max_birth_count2[markovHistory2] + 1)]
                 for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
-                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count2[meas_lt_diff2])
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(markov_history_frame_count2[markovHistory2])
                 assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
-                all_birth_probabilities_det2[meas_lt_diff2] = mltDiff_birth_probabilities_det2
+                all_birth_probabilities_det2[markovHistory2] = mltDiff_birth_probabilities_det2
 
         #replace 0 probabilities with .0000001/(number of 0 values ) and subtract .0000001 from max probability
         else: 
             #detections 1
-            for meas_lt_diff1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
-                zero_count = max_birth_count1[meas_lt_diff1] + 1 - len(mltDiff_birth_count_dict_det1)
+            for markovHistory1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                zero_count = max_birth_count1[markovHistory1] + 1 - len(mltDiff_birth_count_dict_det1)
                 assert(zero_count>=0)
                 if zero_count == 0:
-                    mltDiff_birth_probabilities_det1 = [0.0 for i in range(max_birth_count1[meas_lt_diff1] + 1)]
+                    mltDiff_birth_probabilities_det1 = [0.0 for i in range(max_birth_count1[markovHistory1] + 1)]
                 else:
-                    mltDiff_birth_probabilities_det1 = [.0000001/float(zero_count) for i in range(max_birth_count1[meas_lt_diff1] + 1)]
+                    mltDiff_birth_probabilities_det1 = [.0000001/float(zero_count) for i in range(max_birth_count1[markovHistory1] + 1)]
                 
                 for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
-                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(meas_lt_diff_frame_count1[meas_lt_diff1])
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(markov_history_frame_count1[markovHistory1])
 
                 if not zero_count == 0:
                     max_prob = max(mltDiff_birth_probabilities_det1)
@@ -1432,19 +1429,19 @@ class MultiDetections:
                     mltDiff_birth_probabilities_det1[max_index] -= .0000001
 
                 assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
-                all_birth_probabilities_det1[meas_lt_diff1] = mltDiff_birth_probabilities_det1
+                all_birth_probabilities_det1[markovHistory1] = mltDiff_birth_probabilities_det1
 
             #detections 2
-            for meas_lt_diff2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
-                zero_count = max_birth_count2[meas_lt_diff2] + 1 - len(mltDiff_birth_count_dict_det2)
+            for markovHistory2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                zero_count = max_birth_count2[markovHistory2] + 1 - len(mltDiff_birth_count_dict_det2)
                 assert(zero_count>=0)
                 if zero_count == 0:
-                    mltDiff_birth_probabilities_det2 = [0.0 for i in range(max_birth_count2[meas_lt_diff2] + 1)]
+                    mltDiff_birth_probabilities_det2 = [0.0 for i in range(max_birth_count2[markovHistory2] + 1)]
                 else:
-                    mltDiff_birth_probabilities_det2 = [.0000001/float(zero_count) for i in range(max_birth_count2[meas_lt_diff2] + 1)]
+                    mltDiff_birth_probabilities_det2 = [.0000001/float(zero_count) for i in range(max_birth_count2[markovHistory2] + 1)]
                 
                 for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
-                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(meas_lt_diff_frame_count2[meas_lt_diff2])
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(markov_history_frame_count2[markovHistory2])
                 
                 if not zero_count == 0:
                     max_prob = max(mltDiff_birth_probabilities_det2)
@@ -1453,7 +1450,201 @@ class MultiDetections:
                     mltDiff_birth_probabilities_det2[max_index] -= .0000001         
 
                 assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
-                all_birth_probabilities_det2[meas_lt_diff2] = mltDiff_birth_probabilities_det2
+                all_birth_probabilities_det2[markovHistory2] = mltDiff_birth_probabilities_det2
+
+
+        assert (type(all_birth_probabilities_det1) == dict), (type(all_birth_probabilities_det1), all_birth_probabilities_det1)
+        assert (type(all_birth_probabilities_det2) == dict), (type(all_birth_probabilities_det2), all_birth_probabilities_det2)
+        return (all_birth_probabilities_det1, all_birth_probabilities_det2)
+
+
+    def get_all_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
+                                            m = BIRTH_CLUTTER_MARKOV_ORDER, doctor_birth_probs = True, allow_target_rebirth = True):
+        """
+        Input:
+        - min_score_det_1: detections must have score >= min_score_det_1 to be considered
+        - max_score_det_1: detections must have score < max_score_det_1 to be considered
+        - min_score_det_2: detections must have score >= min_score_det_2 to be considered
+        - max_score_det_2: detections must have score < max_score_det_2 to be considered
+        - allow_target_rebirth: boolean, specifies whether ground truth targets are allowed to die and be reborn.
+            In the training data, if ignored ground truth is included, I think there are only two cases where a target
+            dies and is reborn.  I'm not sure if this is an error, but it's small enough to not really make a difference
+            either way.  If ignored ground truths are not included, the number of ground truth objects that die and are 
+            reborn increases, but is still probably small enough to not make much of a difference (would be good to double check!)
+        - m: order of the Markov chain. Clutter probabilities are dependent on the number of living targets
+            m time instances in the past and the number of measurements 0, 1,..., to m time instances in the past
+
+         - m: order of the Markov chain. Clutter probabilities are dependent on the number of living targets
+            m time instances in the past and the number of measurements 0, 1,..., to m-1 time instances in the past
+
+        We index probabilities by the markovHistory of the current state, where the markovHistory is the list:
+        [(#measurements m-1 time instances ago) - (# living targets m time instances ago),
+         .
+         .
+         .
+         (#measurements 0 time instances ago or at the current time) - (# living targets m time instances ago)]
+
+        If the frame_idx is less than m, we replace missing markovHistory list values with float("inf")
+
+
+        Output:
+        - all_birth_probabilities: all_birth_probabilities[j] is 
+            (number of frames containing j birth measurements with scores in the range [min_score_det_1, max_score_det_1])
+            / (total number of frames)
+            where a "birth measurement" is a measurement of a ground truth target that has not been associated
+            with a detection (of any score value in this AllData instance) on any previous time instance
+        """
+
+        total_frame_count = 0
+        #max_birth_count1[list_i] = largest number of detection1 births in a single frame with a markovHistory of list_i
+        max_birth_count1 = {}
+        #max_birth_count2[list_i] = largest number of detection2 births in a single frame with a markovHistory of list_i
+        max_birth_count2 = {}
+        #birth_count_dict[list_i][5] = 18 means that 18 frames have a markovHistory of list_i and contain 5 birth measurements
+        birth_count_dict_det1 = {}
+        birth_count_dict_det2 = {}
+
+        #markov_history_frame_count[list_i] = j means that j frames have a markovHistory of list_i
+        markov_history_frame_count1 = {}
+        markov_history_frame_count2 = {}
+
+        assert(len(self.det_objects1) == len(self.det_objects2))
+        for seq_idx in self.training_sequences:
+            assert(len(self.det_objects1[seq_idx]) == len(self.det_objects2[seq_idx]))
+
+            #contains ids of all ground truth tracks that have been previously associated with a detection
+            previously_detected_gt_ids = []
+            for frame_idx in range(len(self.det_objects1[seq_idx])):
+                if frame_idx >= m:
+                    previously_detected_gt_ids = []
+                    for gt_object in self.gt_objects[seq_idx][frame_idx-m]:
+                        previously_detected_gt_ids.append(gt_object.track_id)
+
+                total_frame_count += 1
+
+                #detections1
+                markovHistory1 = tuple(get_markov_history(self.gt_objects, self.det_objects1, seq_idx, frame_idx, m))
+                if markovHistory1 in markov_history_frame_count1:
+                    markov_history_frame_count1[markovHistory1] += 1
+                else:
+                    markov_history_frame_count1[markovHistory1] = 1
+
+
+                cur_frame_birth_count1 = 0
+                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
+                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_1 and \
+                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
+                            cur_frame_birth_count1 += 1
+
+                if (not markovHistory1 in max_birth_count1) or \
+                   cur_frame_birth_count1 > max_birth_count1[markovHistory1]:
+                    max_birth_count1[markovHistory1] = cur_frame_birth_count1
+
+
+                if markovHistory1 in birth_count_dict_det1:
+                    if cur_frame_birth_count1 in birth_count_dict_det1[markovHistory1]:
+                        birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] += 1
+                    else:
+                        birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] = 1
+                else:
+                    birth_count_dict_det1[markovHistory1] = {}
+                    birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] = 1
+
+
+                #detections2
+                markovHistory2 = tuple(get_markov_history(self.gt_objects, self.det_objects2, seq_idx, frame_idx, m))
+                if markovHistory2 in markov_history_frame_count2:
+                    markov_history_frame_count2[markovHistory2] += 1
+                else:
+                    markov_history_frame_count2[markovHistory2] = 1
+
+                cur_frame_birth_count2 = 0
+                for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
+                    if (not self.det_objects2[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                        previously_detected_gt_ids.append(self.det_objects2[seq_idx][frame_idx][det_idx].assoc)
+                        if (self.det_objects2[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
+                            self.det_objects2[seq_idx][frame_idx][det_idx].score < max_score_det_2):
+                            cur_frame_birth_count2 += 1
+
+
+                if (not markovHistory2 in max_birth_count2) or \
+                   cur_frame_birth_count2 > max_birth_count2[markovHistory2]:
+                    max_birth_count2[markovHistory2] = cur_frame_birth_count2
+
+
+                if markovHistory2 in birth_count_dict_det2:
+                    if cur_frame_birth_count2 in birth_count_dict_det2[markovHistory2]:
+                        birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] += 1
+                    else:
+                        birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] = 1
+                else:
+                    birth_count_dict_det2[markovHistory2] = {}
+                    birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] = 1
+
+
+        all_birth_probabilities_det1 = {}
+        all_birth_probabilities_det2 = {}
+        if not doctor_birth_probs:
+            #detections 1
+            for markovHistory1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                mltDiff_birth_probabilities_det1 = [0 for i in range(max_birth_count1[markovHistory1] + 1)]
+                for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(markov_history_frame_count1[markovHistory1])
+                assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
+                all_birth_probabilities_det1[markovHistory1] = mltDiff_birth_probabilities_det1
+            #detections 2
+            for markovHistory2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                mltDiff_birth_probabilities_det2 = [0 for i in range(max_birth_count2[markovHistory2] + 1)]
+                for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(markov_history_frame_count2[markovHistory2])
+                assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
+                all_birth_probabilities_det2[markovHistory2] = mltDiff_birth_probabilities_det2
+
+        #replace 0 probabilities with .0000001/(number of 0 values ) and subtract .0000001 from max probability
+        else: 
+            #detections 1
+            for markovHistory1, mltDiff_birth_count_dict_det1 in birth_count_dict_det1.iteritems():
+                zero_count = max_birth_count1[markovHistory1] + 1 - len(mltDiff_birth_count_dict_det1)
+                assert(zero_count>=0)
+                if zero_count == 0:
+                    mltDiff_birth_probabilities_det1 = [0.0 for i in range(max_birth_count1[markovHistory1] + 1)]
+                else:
+                    mltDiff_birth_probabilities_det1 = [.0000001/float(zero_count) for i in range(max_birth_count1[markovHistory1] + 1)]
+                
+                for birth_count, frequency in mltDiff_birth_count_dict_det1.iteritems():
+                    mltDiff_birth_probabilities_det1[birth_count] = float(frequency)/float(markov_history_frame_count1[markovHistory1])
+
+                if not zero_count == 0:
+                    max_prob = max(mltDiff_birth_probabilities_det1)
+                    max_index = mltDiff_birth_probabilities_det1.index(max_prob)
+                    assert(mltDiff_birth_probabilities_det1[max_index] > .001)
+                    mltDiff_birth_probabilities_det1[max_index] -= .0000001
+
+                assert(abs(sum(mltDiff_birth_probabilities_det1) - 1.0) < .000000001)
+                all_birth_probabilities_det1[markovHistory1] = mltDiff_birth_probabilities_det1
+
+            #detections 2
+            for markovHistory2, mltDiff_birth_count_dict_det2 in birth_count_dict_det2.iteritems():
+                zero_count = max_birth_count2[markovHistory2] + 1 - len(mltDiff_birth_count_dict_det2)
+                assert(zero_count>=0)
+                if zero_count == 0:
+                    mltDiff_birth_probabilities_det2 = [0.0 for i in range(max_birth_count2[markovHistory2] + 1)]
+                else:
+                    mltDiff_birth_probabilities_det2 = [.0000001/float(zero_count) for i in range(max_birth_count2[markovHistory2] + 1)]
+                
+                for birth_count, frequency in mltDiff_birth_count_dict_det2.iteritems():
+                    mltDiff_birth_probabilities_det2[birth_count] = float(frequency)/float(markov_history_frame_count2[markovHistory2])
+                
+                if not zero_count == 0:
+                    max_prob = max(mltDiff_birth_probabilities_det2)
+                    max_index = mltDiff_birth_probabilities_det2.index(max_prob)
+                    assert(mltDiff_birth_probabilities_det2[max_index] > .001)
+                    mltDiff_birth_probabilities_det2[max_index] -= .0000001         
+
+                assert(abs(sum(mltDiff_birth_probabilities_det2) - 1.0) < .000000001)
+                all_birth_probabilities_det2[markovHistory2] = mltDiff_birth_probabilities_det2
 
 
         assert (type(all_birth_probabilities_det1) == dict), (type(all_birth_probabilities_det1), all_birth_probabilities_det1)
@@ -1896,7 +2087,7 @@ class AllData:
 
         return p_target_emission
 
-    def get_clutter_probabilities_score_range(self, min_score, max_score, doctor_clutter_probs = True, debug=True):
+    def get_clutter_probabilities_score_range(self, min_score, max_score, m=BIRTH_CLUTTER_MARKOV_ORDER, doctor_clutter_probs = True, debug=True):
         """
         Input:
         - min_score: detections must have score >= min_score to be considered
@@ -1905,9 +2096,17 @@ class AllData:
             targets from the previous time instance)
         - doctor_clutter_probs: if True, replace 0 probabilities with .0000001/(number of 0 values + 20), extend clutter
             counts by 20 beyound max_clutter_count, and subtract .0000001 from max probability
+        - m: order of the Markov chain. Clutter probabilities are dependent on the number of living targets
+            m time instances in the past and the number of measurements 0, 1,..., to m-1 time instances in the past
 
-        Definition: measurement-living target difference = (the number of measurements in the current time instance) 
-                                                         - (the number of living targets from the previous time instance)
+        We index probabilities by the markovHistory of the current state, where the markovHistory is the list:
+        [(#measurements m-1 time instances ago) - (# living targets m time instances ago),
+         .
+         .
+         .
+         (#measurements 0 time instances ago or at the current time) - (# living targets m time instances ago)]
+
+        If the frame_idx is less than m, we replace missing markovHistory list values with float("inf")
 
         Output:
         - all_clutter_probabilities: a dictionary of lists, where all_clutter_probabilities[i][j] is 
@@ -1919,28 +2118,25 @@ class AllData:
         total_frame_count = 0
         total_detection_count = 0
         total_clutter_count = 0
-        #max_clutter_count[i] is the largest number of clutter objects in a single frame with a
-        #measurement-living target difference of i
+        #max_clutter_count[list_i] is the largest number of clutter objects in a single frame with a
+        #markovHistory of list_i
         max_clutter_count = {}
-        #meas_lt_diff_frame_count[i] = j means that j frames have a measurement-living target difference of i
-        meas_lt_diff_frame_count = {}
-        #clutter_count_dict[2][5] = 18 means that 18 frames have a measurement-living target difference of 2
+        #markovHistory_frame_count[list_i] = j means that j frames have the markovHistory list_i
+        markovHistory_frame_count = {}
+        #clutter_count_dict[list_i][5] = 18 means that 18 frames have a markovHistory of list_i
         #and contain 5 clutter measurements
         clutter_count_dict = {}
         for seq_idx in self.training_sequences:
             for frame_idx in range(len(self.det_objects[seq_idx])):
                 total_frame_count += 1
                 cur_frame_clutter_count = 0
-                num_meas = len(self.det_objects[seq_idx][frame_idx])
-                if frame_idx == 0:
-                    prev_num_living_targets = 0
-                else:    
-                    prev_num_living_targets = len(self.gt_objects[seq_idx][frame_idx-1])
-                meas_lt_diff = num_meas - prev_num_living_targets
-                if meas_lt_diff in meas_lt_diff_frame_count:
-                    meas_lt_diff_frame_count[meas_lt_diff] += 1
+
+                markovHistory = tuple(get_markov_history(self.gt_objects, self.det_objects, seq_idx, frame_idx, m))
+
+                if markovHistory in markovHistory_frame_count:
+                    markovHistory_frame_count[markovHistory] += 1
                 else:
-                    meas_lt_diff_frame_count[meas_lt_diff] = 1
+                    markovHistory_frame_count[markovHistory] = 1
                 for det_idx in range(len(self.det_objects[seq_idx][frame_idx])):
                     total_detection_count += 1
                     if (self.det_objects[seq_idx][frame_idx][det_idx].assoc == -1 and \
@@ -1949,44 +2145,44 @@ class AllData:
                         cur_frame_clutter_count += 1
                         total_clutter_count += 1
 
-                if (not meas_lt_diff in max_clutter_count) or \
-                   cur_frame_clutter_count > max_clutter_count[meas_lt_diff]:
-                    max_clutter_count[meas_lt_diff] = cur_frame_clutter_count 
+                if (not markovHistory in max_clutter_count) or \
+                   cur_frame_clutter_count > max_clutter_count[markovHistory]:
+                    max_clutter_count[markovHistory] = cur_frame_clutter_count 
 
 
-                if meas_lt_diff in clutter_count_dict:
-                    if cur_frame_clutter_count in clutter_count_dict[meas_lt_diff]:
-                        clutter_count_dict[meas_lt_diff][cur_frame_clutter_count] += 1
+                if markovHistory in clutter_count_dict:
+                    if cur_frame_clutter_count in clutter_count_dict[markovHistory]:
+                        clutter_count_dict[markovHistory][cur_frame_clutter_count] += 1
                     else:
-                        clutter_count_dict[meas_lt_diff][cur_frame_clutter_count] = 1
+                        clutter_count_dict[markovHistory][cur_frame_clutter_count] = 1
                 else:
-                    clutter_count_dict[meas_lt_diff] = {}
-                    clutter_count_dict[meas_lt_diff][cur_frame_clutter_count] = 1
+                    clutter_count_dict[markovHistory] = {}
+                    clutter_count_dict[markovHistory][cur_frame_clutter_count] = 1
 
 
         clutter_probabilities = {}
         if not doctor_clutter_probs:
-            for meas_lt_diff, mltDiff_clutter_count_dict in clutter_count_dict.iteritems():
-                mltDiff_clutter_probabilities = [0 for i in range(max_clutter_count[meas_lt_diff] + 1)]
+            for markovHistory, mltDiff_clutter_count_dict in clutter_count_dict.iteritems():
+                mltDiff_clutter_probabilities = [0 for i in range(max_clutter_count[markovHistory] + 1)]
                 for clutter_count, frequency in mltDiff_clutter_count_dict.iteritems():
-                    mltDiff_clutter_probabilities[clutter_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                    mltDiff_clutter_probabilities[clutter_count] = float(frequency)/float(markovHistory_frame_count[markovHistory])
                 assert(abs(sum(mltDiff_clutter_probabilities) - 1.0) < .000000001)
-                clutter_probabilities[meas_lt_diff] = mltDiff_clutter_probabilities
+                clutter_probabilities[markovHistory] = mltDiff_clutter_probabilities
         #replace 0 probabilities with .0000001/(number of 0 values + 20), extend clutter counts by 20 beyound max_clutter_count,
         #subtract .0000001 from max probability
         else: 
-            for meas_lt_diff, mltDiff_clutter_count_dict in clutter_count_dict.iteritems():
-                zero_count = max_clutter_count[meas_lt_diff] + 1 - len(mltDiff_clutter_count_dict)
+            for markovHistory, mltDiff_clutter_count_dict in clutter_count_dict.iteritems():
+                zero_count = max_clutter_count[markovHistory] + 1 - len(mltDiff_clutter_count_dict)
                 assert(zero_count>=0)
-                mltDiff_clutter_probabilities = [.0000001/float(zero_count + 20) for i in range(max_clutter_count[meas_lt_diff] + 1 + 20)]
+                mltDiff_clutter_probabilities = [.0000001/float(zero_count + 20) for i in range(max_clutter_count[markovHistory] + 1 + 20)]
                 for clutter_count, frequency in mltDiff_clutter_count_dict.iteritems():
-                    mltDiff_clutter_probabilities[clutter_count] = float(frequency)/float(meas_lt_diff_frame_count[meas_lt_diff])
+                    mltDiff_clutter_probabilities[clutter_count] = float(frequency)/float(markovHistory_frame_count[markovHistory])
                 max_prob = max(mltDiff_clutter_probabilities)
                 max_index = mltDiff_clutter_probabilities.index(max_prob)
                 assert(mltDiff_clutter_probabilities[max_index] > .001)
                 mltDiff_clutter_probabilities[max_index] -= .0000001
                 assert(abs(sum(mltDiff_clutter_probabilities) - 1.0) < .000000001)
-                clutter_probabilities[meas_lt_diff] = mltDiff_clutter_probabilities
+                clutter_probabilities[markovHistory] = mltDiff_clutter_probabilities
 
         if debug:
             print '-'*10
@@ -2435,6 +2631,29 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     print "HELLO#8"
 
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+
+
+
+def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
+    """
+    - m: order of the Markov chain. Clutter probabilities are dependent on the number of living targets
+        m time instances in the past and the number of measurements 0, 1,..., to m time instances in the past
+
+    """
+    if frame_idx >= m: #get the number of living targets m time steps ago
+        lt_count = len(gt_objects[seq_idx][frame_idx - m])
+    else: #set to 0 if frame_idx < m
+        lt_count = 0
+
+    markovHistory = []
+    for time_offset in range(m-1, -1, -1):
+        if time_offset > frame_idx:
+            markovHistory.append(float("inf"))
+        else:    
+            meas_count = len(det_objects[seq_idx][frame_idx - time_offset])
+            markovHistory.append(meas_count - lt_count)
+
+    return markovHistory
 
 
 

@@ -18,6 +18,7 @@ import sys
 import resource
 import errno
 from munkres import Munkres
+from collections import deque
 
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
@@ -25,6 +26,8 @@ sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
+from learn_params1 import BIRTH_CLUTTER_MARKOV_ORDER
+
 from jdk_helper_evaluate_results import eval_results
 
 #from multiple_meas_per_time_assoc_priors import HiddenState
@@ -590,6 +593,10 @@ class TargetSet:
 			f.close()
 
 
+
+
+
+
 class Particle:
 	def __init__(self, id_):
 		#Targets tracked by this particle
@@ -604,6 +611,17 @@ class Particle:
 
 		self.parent_id = -1
 
+		#keep track of the m-1 most recent birth counts, 
+		#where m is the order of the Markov chain
+		self.markovBirthCounts = deque([])
+
+		self.meas1MarkovHistory = deque([float("inf") for i in range(BIRTH_CLUTTER_MARKOV_ORDER)])
+		self.meas2MarkovHistory = deque([float("inf") for i in range(BIRTH_CLUTTER_MARKOV_ORDER)])
+
+		#remember the current living target count and the living target count from the past
+		#BIRTH_CLUTTER_MARKOV_ORDER steps
+		self.livTargCountMarkovHistory = deque([0 for i in range(BIRTH_CLUTTER_MARKOV_ORDER + 1)])
+
 		#for debugging
 		self.c_debug = -1
 		self.imprt_re_weight_debug = -1
@@ -611,10 +629,47 @@ class Particle:
 		self.pi_clutter_debug = -1
 		self.pi_targets_debug = []
 
+	def markov_history_difference(self, markovHistory1, markovHistory2):
+		assert(len(markovHistory1) == len(markovHistory2))
+		difference = 0
+		for i in range(len(markovHistory1)):
+			difference += abs(markovHistory1[i] - markovHistory2[i])
+		return difference
+
+	def get_closest_markov_history(self, birth_probs, clutter_probs, det_idx):
+		if det_idx == 0:
+			exactMarkovHistory = tuple(self.meas1MarkovHistory)
+		else:
+			assert(det_idx == 1)
+			exactMarkovHistory = tuple(self.meas2MarkovHistory)
+		if exactMarkovHistory in birth_probs:
+			global EXACT_MARKOV_HISTORY_MATCHES
+			EXACT_MARKOV_HISTORY_MATCHES+=1			
+			assert(exactMarkovHistory in clutter_probs)
+			return exactMarkovHistory
+		else:
+			global INEXACT_MARKOV_HISTORY_MATCHES
+			INEXACT_MARKOV_HISTORY_MATCHES+=1				
+			closestMarkovHistory = birth_probs.iterkeys().next()
+			smallestDiff = self.markov_history_difference(exactMarkovHistory, closestMarkovHistory)
+			for curMarkovHistory in birth_probs:
+				curDiff = self.markov_history_difference(exactMarkovHistory, curMarkovHistory)
+				if curDiff < smallestDiff:
+					closestMarkovHistory = curMarkovHistory
+					smallestDiff = curDiff
+			assert(closestMarkovHistory in clutter_probs)
+			return closestMarkovHistory
+
 	def create_child(self):
 		child_particle = Particle(self.id_)
 		child_particle.importance_weight = self.importance_weight
 		child_particle.targets = self.targets.create_child()
+
+		child_particle.markovBirthCounts = self.markovBirthCounts 
+
+		child_particle.meas1MarkovHistory = self.meas1MarkovHistory
+		child_particle.meas2MarkovHistory = self.meas2MarkovHistory
+		child_particle.livTargCountMarkovHistory = self.livTargCountMarkovHistory
 		return child_particle
 
 	def create_new_target(self, measurement, width, height, cur_time):
@@ -744,7 +799,7 @@ class Particle:
 		proposal_probability = 1.0
 
 		#sample measurement associations
-		birth_count = 0
+		birth_count = sum(self.markovBirthCounts)
 		clutter_count = 0
 		remaining_meas_count = len(measurement_list)
 		for (index, cur_meas) in enumerate(measurement_list):
@@ -769,47 +824,24 @@ class Particle:
 
 				proposal_distribution_list.append(cur_target_likelihood*cur_target_prior)
 
-			#number of measurements - number of living targets from the previous time instance
-			meas_lt_diff = len(measurement_list) - total_target_count
-			if meas_lt_diff in BIRTH_PROBABILITIES[meas_source_index][score_index]:
-				mlt_idx = meas_lt_diff
-			#if the measurement-living target difference did not occur in the training data,
-			#find the closest measurement-living target difference that did. In the case of a tie,
-			#pick the one with the smaller absolute value (kind of arbitrary, but assuming that 
-			#there were more training instances with measurement-living target differences closer to zero
-			#so may have had more training data and should discourage extreme values)
-			else:
-				closest_mlt_idx = BIRTH_PROBABILITIES[meas_source_index][score_index].iterkeys().next()
-				for mlt_key in BIRTH_PROBABILITIES[meas_source_index][score_index]:
-					if(abs(meas_lt_diff - mlt_key) < abs(meas_lt_diff - closest_mlt_idx)) or \
-					  (abs(meas_lt_diff - mlt_key) == abs(meas_lt_diff - closest_mlt_idx) and \
-					   abs(mlt_key) < abs(closest_mlt_idx)):
-						closest_mlt_idx = mlt_key
-				mlt_idx = closest_mlt_idx	
 
 
-#			if not mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index]:
-#				print "CLUTTER_PROBABILITIES[meas_source_index][score_index]:"
-#				print CLUTTER_PROBABILITIES[meas_source_index][score_index]
-#				print "BIRTH_PROBABILITIES[meas_source_index][score_index]:"
-#				print BIRTH_PROBABILITIES[meas_source_index][score_index]
-			#print "CLUTTER_PROBABILITIES:"
-			#print CLUTTER_PROBABILITIES
-			#print "BIRTH_PROBABILITIES:"
-			#print BIRTH_PROBABILITIES
-			#sleep(5)
-			assert(mlt_idx in CLUTTER_PROBABILITIES[meas_source_index][score_index])		
+			closestMarkovHistory = self.get_closest_markov_history(BIRTH_PROBABILITIES[meas_source_index][score_index], \
+															  	   CLUTTER_PROBABILITIES[meas_source_index][score_index], \
+															  	   meas_source_index)
+
+	
 
 			#compute birth association proposal probability
 			cur_birth_prior = 0.0
-			for i in range(birth_count+1, min(len(BIRTH_PROBABILITIES[meas_source_index][score_index][mlt_idx]), remaining_meas_count + birth_count + 1)):
-				cur_birth_prior += BIRTH_PROBABILITIES[meas_source_index][score_index][mlt_idx][i]*(i - birth_count)/remaining_meas_count 
+			for i in range(birth_count+1, min(len(BIRTH_PROBABILITIES[meas_source_index][score_index][closestMarkovHistory]), remaining_meas_count + birth_count + 1)):
+				cur_birth_prior += BIRTH_PROBABILITIES[meas_source_index][score_index][closestMarkovHistory][i]*(i - birth_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_birth_prior*p_birth_likelihood)
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
-			for i in range(clutter_count+1, min(len(CLUTTER_PROBABILITIES[meas_source_index][score_index][mlt_idx]), remaining_meas_count + clutter_count + 1)):
-				cur_clutter_prior += CLUTTER_PROBABILITIES[meas_source_index][score_index][mlt_idx][i]*(i - clutter_count)/remaining_meas_count 
+			for i in range(clutter_count+1, min(len(CLUTTER_PROBABILITIES[meas_source_index][score_index][closestMarkovHistory]), remaining_meas_count + clutter_count + 1)):
+				cur_clutter_prior += CLUTTER_PROBABILITIES[meas_source_index][score_index][closestMarkovHistory][i]*(i - clutter_count)/remaining_meas_count 
 			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
 
 			#normalize the proposal distribution
@@ -950,7 +982,8 @@ class Particle:
 
 	def get_prior(self, living_target_indices, total_target_count, number_measurements, 
 				 measurement_associations, p_target_deaths, target_emission_probs, 
-				 birth_count_priors, clutter_count_priors, measurement_scores, score_intervals):
+				 birth_count_priors, clutter_count_priors, measurement_scores, score_intervals,
+				 meas_source_index):
 		"""
 DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		REDOCUMENT
@@ -1075,30 +1108,18 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 						  					birth_count, clutter_count)
 
 
+		
 
 		for cur_score_index in range(len(score_intervals)):
-			#number of measurements - number of living targets from the previous time instance
-			meas_lt_diff = number_measurements - total_target_count
-			if meas_lt_diff in birth_count_priors[cur_score_index]:
-				mlt_idx = meas_lt_diff
-			#if the measurement-living target difference did not occur in the training data,
-			#find the closest measurement-living target difference that did. In the case of a tie,
-			#pick the one with the smaller absolute value (kind of arbitrary, but assuming that 
-			#there were more training instances with measurement-living target differences closer to zero
-			#so may have had more training data and should discourage extreme values)
-			else:
-				closest_mlt_idx = birth_count_priors[cur_score_index].iterkeys().next()
-				for mlt_key in birth_count_priors[cur_score_index]:
-					if(abs(meas_lt_diff - mlt_key) < abs(meas_lt_diff - closest_mlt_idx)) or \
-					  (abs(meas_lt_diff - mlt_key) == abs(meas_lt_diff - closest_mlt_idx) and \
-					   abs(mlt_key) < abs(closest_mlt_idx)):
-						closest_mlt_idx = mlt_key
-				mlt_idx = closest_mlt_idx	
-			assert(mlt_idx in clutter_count_priors[cur_score_index])
+			closestMarkovHistory = self.get_closest_markov_history(birth_count_priors[cur_score_index], \
+																   clutter_count_priors[cur_score_index], \
+																   meas_source_index)
 
+			prv_birth_count = sum(self.markovBirthCounts)
+			#SHOULD ONLY BE USED THIS WAY WITH A SINGLE SCORE INTERVAL!!
 			assoc_prior *= target_emission_probs[cur_score_index]**(meas_counts_by_score[cur_score_index]) \
-							  *birth_count_priors[cur_score_index][mlt_idx][birth_counts_by_score[cur_score_index]] \
-							  *clutter_count_priors[cur_score_index][mlt_idx][clutter_counts_by_score[cur_score_index]] \
+							  *birth_count_priors[cur_score_index][closestMarkovHistory][prv_birth_count+birth_counts_by_score[cur_score_index]] \
+							  *clutter_count_priors[cur_score_index][closestMarkovHistory][clutter_counts_by_score[cur_score_index]] \
 						  
 
 		total_prior = death_prior * assoc_prior
@@ -1107,8 +1128,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			for i in range(len(score_intervals)):
 				print "for score interval beginning at", score_intervals[i]
 				print "target emmission prob =", target_emission_probs[i]**(meas_counts_by_score[i])
-				print "birth prior=", birth_count_priors[i][mlt_idx][birth_counts_by_score[i]] 
-				print "clutter prior=", clutter_count_priors[i][mlt_idx][clutter_counts_by_score[i]] 
+				print "birth prior=", birth_count_priors[i][closestMarkovHistory][birth_counts_by_score[i]] 
+				print "clutter prior=", clutter_count_priors[i][closestMarkovHistory][clutter_counts_by_score[i]] 
 
 		assert(total_prior != 0.0), (death_prior, assoc_prior, target_emission_probs, birth_count_priors, clutter_count_priors)
 #		return total_prior
@@ -1143,7 +1164,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		prior = self.get_prior(living_target_indices, total_target_count, len(measurement_list), 
 				 				   measurement_associations, p_target_deaths, TARGET_EMISSION_PROBS[meas_source_index], 
-								   BIRTH_PROBABILITIES[meas_source_index], CLUTTER_PROBABILITIES[meas_source_index], measurement_scores, score_intervals)
+								   BIRTH_PROBABILITIES[meas_source_index], CLUTTER_PROBABILITIES[meas_source_index], 
+								   measurement_scores, score_intervals, meas_source_index)
 
 #		hidden_state = HiddenState(living_target_indices, total_target_count, len(measurement_list), 
 #				 				   measurement_associations, p_target_deaths, P_TARGET_EMISSION, 
@@ -1289,7 +1311,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				assert(meas_assoc == -1), ("meas_assoc = ", meas_assoc)
 
 	#@profile
-	def update_particle_with_measurement(self, cur_time, measurement_lists, widths, heights, measurement_scores):
+	def update_particle_with_measurement(self, cur_time, measurement_lists, widths, heights, measurement_scores, frame_idx):
 		"""
 		Input:
 		- measurement_lists: a list where measurement_lists[i] is a list of all measurements from the current
@@ -1305,12 +1327,15 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		- new_target: True if a new target was created
 		"""
 		new_target = False #debugging
-
+		self.advance_markov_measurement_histories(measurement_lists)
 		birth_value = self.targets.living_count
 
 		(measurement_associations, dead_target_indices, imprt_re_weight) = \
 			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurement_lists, \
 				cur_time, measurement_scores)
+
+
+
 		assert(len(measurement_associations) == len(measurement_lists))
 		assert(imprt_re_weight != 0.0), imprt_re_weight
 		self.importance_weight *= imprt_re_weight #update particle's importance weight
@@ -1339,7 +1364,40 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		assert(self.targets.living_count == original_num_targets + num_targets_born - num_targets_killed)
 		#done checking if something funny is happening
 
+		birth_count = measurement_associations.count(birth_value)
+		self.markovBirthCounts.append(birth_count)
+		if frame_idx >= BIRTH_CLUTTER_MARKOV_ORDER - 1:
+			self.markovBirthCounts.popleft()
+			assert(len(self.markovBirthCounts) == BIRTH_CLUTTER_MARKOV_ORDER - 1), (len(self.markovBirthCounts), BIRTH_CLUTTER_MARKOV_ORDER - 1)
+	 	
+		self.update_livTargCountMarkovHistory()
+
 		return new_target
+
+	def advance_markov_measurement_histories(self, measurement_lists):
+		"""
+		Run before processing the current measurement to update markov measurement histories
+		"""
+	 	assert(len(self.meas1MarkovHistory) == BIRTH_CLUTTER_MARKOV_ORDER)
+	 	for i in range(len(self.meas1MarkovHistory)):
+	 		self.meas1MarkovHistory[i] = self.meas1MarkovHistory[i] + self.livTargCountMarkovHistory[0] \
+	 								    -self.livTargCountMarkovHistory[1]
+		self.meas1MarkovHistory.append(len(measurement_lists[0]) - self.livTargCountMarkovHistory[1])
+		self.meas1MarkovHistory.popleft()
+
+		if len(measurement_lists) == 2: #we have two measurement sources
+			assert(len(self.meas2MarkovHistory) == BIRTH_CLUTTER_MARKOV_ORDER)
+
+		 	for i in range(len(self.meas2MarkovHistory)):
+		 		self.meas2MarkovHistory[i] = self.meas2MarkovHistory[i] + self.livTargCountMarkovHistory[0] \
+		 								    -self.livTargCountMarkovHistory[1]
+
+			self.meas2MarkovHistory.append(len(measurement_lists[1]) - self.livTargCountMarkovHistory[1])
+			self.meas2MarkovHistory.popleft()
+
+	def update_livTargCountMarkovHistory(self):
+	 	self.livTargCountMarkovHistory.append(self.targets.living_count)
+	 	self.livTargCountMarkovHistory.popleft()
 
 	def plot_all_target_locations(self):
 		fig = plt.figure()
@@ -1507,7 +1565,7 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 
 		new_target_list = [] #for debugging, list of booleans whether each particle created a new target
 		for particle in particle_set:
-			new_target = particle.update_particle_with_measurement(time_stamp, measurement_lists, widths, heights, measurement_scores)
+			new_target = particle.update_particle_with_measurement(time_stamp, measurement_lists, widths, heights, measurement_scores, time_instance_index)
 			new_target_list.append(new_target)
 		normalize_importance_weights(particle_set)
 		#debugging
@@ -1918,6 +1976,8 @@ if __name__ == "__main__":
 
 
 	elif peripheral == 'run':
+		INEXACT_MARKOV_HISTORY_MATCHES = 0
+		EXACT_MARKOV_HISTORY_MATCHES = 0
 		print 'begin run'
 #debug
 		indicate_run_started_filename = '%s/results_by_run/run_%d/seq_%d_started.txt' % (results_folder, run_idx, seq_idx)
@@ -1995,22 +2055,22 @@ if __name__ == "__main__":
 			#NOT_BORDER_DEATH_PROBABILITIES = [-99, 0.0009339793357071974, 0.006880733944954129, 0.023255813953488372, 0.0481283422459893, 0.006944444444444444]
 
 			assert(len(n_frames) == len(measurementTargetSetsBySequence))
-		#	############DEBUG
-		#	
-		#	print "target emission probs: "
-		#	print TARGET_EMISSION_PROBS
-		#	print "cluter probs: "
-		#	print CLUTTER_PROBABILITIES
-		#	print "birth probs: "
-		#	print BIRTH_PROBABILITIES
-		#	print "Meas noise covs:"
-		#	print MEAS_NOISE_COVS
-		#	print "BORDER_DEATH_PROBABILITIES:"
-		#	print BORDER_DEATH_PROBABILITIES
-		#	print "NOT_BORDER_DEATH_PROBABILITIES:"
-		#	print NOT_BORDER_DEATH_PROBABILITIES
-		#	sleep(5)
-		#	##########DONE DEBUG
+			############DEBUG
+			
+			#print "target emission probs: "
+			#print TARGET_EMISSION_PROBS
+			#print "cluter probs: "
+			#print CLUTTER_PROBABILITIES
+			#print "birth probs: "
+			#print BIRTH_PROBABILITIES
+			#print "Meas noise covs:"
+			#print MEAS_NOISE_COVS
+			#print "BORDER_DEATH_PROBABILITIES:"
+			#print BORDER_DEATH_PROBABILITIES
+			#print "NOT_BORDER_DEATH_PROBABILITIES:"
+			#print NOT_BORDER_DEATH_PROBABILITIES
+			#sleep(5)
+			##########DONE DEBUG
 
 			t0 = time.time()
 			info_by_run = [] #list of info from each run
@@ -2060,7 +2120,9 @@ if __name__ == "__main__":
 			print "MEAS_NOISE_COVS=", MEAS_NOISE_COVS
 			print "BORDER_DEATH_PROBABILITIES=", BORDER_DEATH_PROBABILITIES
 			print "NOT_BORDER_DEATH_PROBABILITIES=", NOT_BORDER_DEATH_PROBABILITIES
-
+			print "EXACT_MARKOV_HISTORY_MATCHES =", EXACT_MARKOV_HISTORY_MATCHES
+			print "INEXACT_MARKOV_HISTORY_MATCHES =", INEXACT_MARKOV_HISTORY_MATCHES
+			print "INEXACT_MARKOV_HISTORY_MATCHES + EXACT_MARKOV_HISTORY_MATCHES =", EXACT_MARKOV_HISTORY_MATCHES + INEXACT_MARKOV_HISTORY_MATCHES
 
 			sys.stdout.close()
 			sys.stdout = stdout
