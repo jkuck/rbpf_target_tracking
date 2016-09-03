@@ -21,7 +21,7 @@ import pickle
 
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
-BIRTH_CLUTTER_MARKOV_ORDER = 1
+BIRTH_CLUTTER_MARKOV_ORDER = 3
 #load ground truth data and detection data, when available, from saved pickle file
 #to cut down on load time
 USE_PICKLED_DATA = True
@@ -2780,7 +2780,8 @@ def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
     else: #set to 0 if frame_idx < m
         lt_count = 0
 
-    markovHistory = []
+    markovHistory = [lt_count]
+
     for time_offset in range(m-1, -1, -1):
         if time_offset > frame_idx:
             markovHistory.append(float("inf"))

@@ -639,10 +639,10 @@ class Particle:
 
 	def get_closest_markov_history(self, birth_probs, clutter_probs, det_idx):
 		if det_idx == 0:
-			exactMarkovHistory = self.meas1MarkovHistory
+			exactMarkovHistory = [self.livTargCountMarkovHistory[1]] + list(self.meas1MarkovHistory) #+ operator used for list concatenation!
 		else:
 			assert(det_idx == 1)
-			exactMarkovHistory = self.meas2MarkovHistory
+			exactMarkovHistory = [self.livTargCountMarkovHistory[1]] + list(self.meas2MarkovHistory) #+ operator used for list concatenation!
 
 		binnedMarkovHistory = []
 		for mlt_diff in exactMarkovHistory:
@@ -1396,12 +1396,12 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		if frame_idx >= BIRTH_CLUTTER_MARKOV_ORDER - 1:
 			self.markovBirthCounts.popleft()
 			assert(len(self.markovBirthCounts) == BIRTH_CLUTTER_MARKOV_ORDER - 1), (len(self.markovBirthCounts), BIRTH_CLUTTER_MARKOV_ORDER - 1, frame_idx)
-		print '-'*20
-		print "update_particle_with_measurement called, print after updating markovBirthCounts, frame_idx =", frame_idx, " num_targets_born =", num_targets_born,
-		print "markovBirthCounts =", self.markovBirthCounts
-		print "self.meas1MarkovHistory =", meas1MarkovHistory
-		print "self.meas2MarkovHistory =", meas2MarkovHistory
-		print "self.livTargCountMarkovHistory =", livTargCountMarkovHistory
+	#	print '-'*20
+	#	print "update_particle_with_measurement called, print after updating markovBirthCounts, frame_idx =", frame_idx, " num_targets_born =", num_targets_born,
+	#	print "markovBirthCounts =", self.markovBirthCounts
+	#	print "self.meas1MarkovHistory =", self.meas1MarkovHistory
+	#	print "self.meas2MarkovHistory =", self.meas2MarkovHistory
+	#	print "self.livTargCountMarkovHistory =", self.livTargCountMarkovHistory
 
 
 		self.update_livTargCountMarkovHistory()
