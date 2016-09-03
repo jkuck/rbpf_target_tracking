@@ -27,6 +27,7 @@ from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
 from learn_params1 import BIRTH_CLUTTER_MARKOV_ORDER
+from learn_params1 import get_binned_mlt_diff
 
 from jdk_helper_evaluate_results import eval_results
 
@@ -638,22 +639,29 @@ class Particle:
 
 	def get_closest_markov_history(self, birth_probs, clutter_probs, det_idx):
 		if det_idx == 0:
-			exactMarkovHistory = tuple(self.meas1MarkovHistory)
+			exactMarkovHistory = self.meas1MarkovHistory
 		else:
 			assert(det_idx == 1)
-			exactMarkovHistory = tuple(self.meas2MarkovHistory)
-		if exactMarkovHistory in birth_probs:
+			exactMarkovHistory = self.meas2MarkovHistory
+
+		binnedMarkovHistory = []
+		for mlt_diff in exactMarkovHistory:
+			binned_diff = get_binned_mlt_diff(mlt_diff)
+			binnedMarkovHistory.append(binned_diff)
+		binnedMarkovHistory = tuple(binnedMarkovHistory)
+
+		if binnedMarkovHistory in birth_probs:
 			global EXACT_MARKOV_HISTORY_MATCHES
 			EXACT_MARKOV_HISTORY_MATCHES+=1			
-			assert(exactMarkovHistory in clutter_probs)
-			return exactMarkovHistory
+			assert(binnedMarkovHistory in clutter_probs)
+			return binnedMarkovHistory
 		else:
 			global INEXACT_MARKOV_HISTORY_MATCHES
 			INEXACT_MARKOV_HISTORY_MATCHES+=1				
 			closestMarkovHistory = birth_probs.iterkeys().next()
-			smallestDiff = self.markov_history_difference(exactMarkovHistory, closestMarkovHistory)
+			smallestDiff = self.markov_history_difference(binnedMarkovHistory, closestMarkovHistory)
 			for curMarkovHistory in birth_probs:
-				curDiff = self.markov_history_difference(exactMarkovHistory, curMarkovHistory)
+				curDiff = self.markov_history_difference(binnedMarkovHistory, curMarkovHistory)
 				if curDiff < smallestDiff:
 					closestMarkovHistory = curMarkovHistory
 					smallestDiff = curDiff
@@ -1097,10 +1105,10 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		#the prior probability of this number of measurements with these associations
 		#given these target deaths
-		for i in range(len(score_intervals)):
-
-			assert(0 <= clutter_counts_by_score[i] and clutter_counts_by_score[i] < len(clutter_count_priors[i])), clutter_counts_by_score[i]
-			assert(0 <= birth_counts_by_score[i] and birth_counts_by_score[i] < len(birth_count_priors[i])), birth_counts_by_score[i]
+#		for i in range(len(score_intervals)):
+#
+#			assert(0 <= clutter_counts_by_score[i] and clutter_counts_by_score[i] < len(clutter_count_priors[i])), (clutter_counts_by_score[i], len(clutter_count_priors[i]), i, len(score_intervals))
+#			assert(0 <= birth_counts_by_score[i] and birth_counts_by_score[i] < len(birth_count_priors[i])), birth_counts_by_score[i]
 
 		p_target_does_not_emit = 1.0 - sum(target_emission_probs)
 		assoc_prior = (p_target_does_not_emit)**(unobserved_target_count) \
@@ -1131,7 +1139,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 				print "birth prior=", birth_count_priors[i][closestMarkovHistory][birth_counts_by_score[i]] 
 				print "clutter prior=", clutter_count_priors[i][closestMarkovHistory][clutter_counts_by_score[i]] 
 
-		assert(total_prior != 0.0), (death_prior, assoc_prior, target_emission_probs, birth_count_priors, clutter_count_priors)
+		assert(total_prior > 0.0 and total_prior <= 1.0), (death_prior, assoc_prior, target_emission_probs, birth_count_priors, clutter_count_priors)
 #		return total_prior
 		return assoc_prior
 

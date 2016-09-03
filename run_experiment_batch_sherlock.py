@@ -3,14 +3,14 @@ import os
 import errno
 
 NUM_RUNS=1
-#SEQUENCES_TO_PROCESS = [i for i in range(21)]
+SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [11]
-SEQUENCES_TO_PROCESS = [0]
+#SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = 'debuggingResultsCanDelete'
+CUR_EXPERIMENT_BATCH_NAME = 'birth_clutter_BinningMarkovOrder2'
 RUN_EVALUATION = True
 
 

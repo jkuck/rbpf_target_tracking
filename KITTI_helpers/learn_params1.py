@@ -21,7 +21,7 @@ import pickle
 
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
-BIRTH_CLUTTER_MARKOV_ORDER = 1
+BIRTH_CLUTTER_MARKOV_ORDER = 2
 #load ground truth data and detection data, when available, from saved pickle file
 #to cut down on load time
 USE_PICKLED_DATA = True
@@ -1338,7 +1338,8 @@ class MultiDetections:
 
                 cur_frame_birth_count1 = 0
                 for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
-                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids and\
+                        self.det_objects1[seq_idx][frame_idx][det_idx].assoc != -1):
                         previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
                         if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_1 and \
                             self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
@@ -1368,7 +1369,8 @@ class MultiDetections:
 
                 cur_frame_birth_count2 = 0
                 for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
-                    if (not self.det_objects2[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
+                    if (not self.det_objects2[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids and\
+                        self.det_objects2[seq_idx][frame_idx][det_idx].assoc != -1):
                         previously_detected_gt_ids.append(self.det_objects2[seq_idx][frame_idx][det_idx].assoc)
                         if (self.det_objects2[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
                             self.det_objects2[seq_idx][frame_idx][det_idx].score < max_score_det_2):
@@ -1522,6 +1524,157 @@ class MultiDetections:
 
                 total_frame_count += 1
 
+
+                def get_birth_count(detections, previously_detected_gt_ids, min_score, max_score):
+                    """
+                    Get the number of births in the specified detections
+                    """
+                    cur_frame_birth_count = 0
+                    for det_idx in range(len(detections)):
+                        if (not detections[det_idx].assoc in previously_detected_gt_ids and \
+                            detections[det_idx].assoc != -1):
+                            previously_detected_gt_ids.append(detections[det_idx].assoc)
+                            if (detections[det_idx].score >= min_score and \
+                                detections[det_idx].score < max_score):
+                                cur_frame_birth_count += 1       
+                    return cur_frame_birth_count
+
+                def get_unassoc_birth_count(gt_objects, previously_detected_gt_ids, min_score, max_score):
+                    """
+                    Get the number of births since BIRTH_CLUTTER_MARKOV_ORDER time instances ago that are not
+                    associated with a detection in the current time step
+                    """
+                    unassoc_birth_count = 0
+
+                    for gt_object in gt_objects:
+                        if (not gt_object.track_id in previously_detected_gt_ids and \
+                            gt_object.associated_detection == None):
+
+                                unassoc_birth_count += 1       
+                    return unassoc_birth_count
+
+                def get_det_count_assoc_w_prv_living(detections, gt_objects, frame_idx, min_score, max_score):
+                    """
+                    Return the number of detections that are associated with previously living ground truth objects
+                    """
+                    if frame_idx < BIRTH_CLUTTER_MARKOV_ORDER:
+                        return 0
+                    prv_living_gt_ids = []
+                    for gt_object in gt_objects[frame_idx - BIRTH_CLUTTER_MARKOV_ORDER]:
+                        prv_living_gt_ids.append(gt_object.track_id)
+                    else:
+                        assoc_prv_living_count = 0
+                        for det_idx in range(len(detections)):
+                            if (detections[det_idx].assoc in prv_living_gt_ids and \
+                                    detections[det_idx].score >= min_score and \
+                                    detections[det_idx].score < max_score):   
+                                assert(detections[det_idx].assoc != -1)                                 
+                                assoc_prv_living_count += 1       
+                        return assoc_prv_living_count
+
+                def get_assoc_det_count(detections, min_score, max_score):
+                    """
+                    Return the number of associated detections
+                    """
+                    assoc_det_count = 0
+                    for det_idx in range(len(detections)):
+                        if (detections[det_idx].assoc != -1 and \
+                                detections[det_idx].score >= min_score and \
+                                detections[det_idx].score < max_score):                                    
+                            assoc_det_count += 1       
+                    return assoc_det_count
+
+                def get_clutter_det_count(detections, min_score, max_score):
+                    """
+                    Return the number of clutter detections
+                    """
+                    clutter_count = 0
+                    for det_idx in range(len(detections)):
+                        if (detections[det_idx].assoc == -1 and \
+                                detections[det_idx].score >= min_score and \
+                                detections[det_idx].score < max_score):                                    
+                            clutter_count += 1       
+                    return clutter_count
+
+                def get_prv_living_gt_count(gt_objects, frame_idx):
+                    """
+                    Return the number of gt objects BIRTH_CLUTTER_MARKOV_ORDER time instances ago
+                    """
+                    if frame_idx < BIRTH_CLUTTER_MARKOV_ORDER:
+                        return 0
+                    else:
+                        return len(gt_objects[frame_idx - BIRTH_CLUTTER_MARKOV_ORDER])
+
+                def get_cur_living_gt_count_not_emitting(gt_objects, frame_idx):
+                    """
+                    Return the number of currently living gt objects that did not emit a measurement
+                    """
+                    living_gt_count_not_emitting = 0
+                    for gt_object in gt_objects[frame_idx]:
+                        if gt_object.associated_detection == None:
+                            living_gt_count_not_emitting += 1
+                    return living_gt_count_not_emitting
+   
+
+                def get_death_count(gt_objects, frame_idx):
+                    """
+                    Return the number of gt objects that have died since BIRTH_CLUTTER_MARKOV_ORDER time instances ago
+                    """
+                    death_count = 0
+                    if frame_idx < BIRTH_CLUTTER_MARKOV_ORDER:
+                        return death_count
+                    else:
+                        currently_living_gt_ids = []
+                        for gt_object in gt_objects[frame_idx]:
+                            currently_living_gt_ids.append(gt_object.track_id)
+
+                        for gt_object in gt_objects[frame_idx - BIRTH_CLUTTER_MARKOV_ORDER]:
+                            if not gt_object.track_id in currently_living_gt_ids:
+                                death_count += 1
+                        return death_count
+
+
+                def update_max_birth_count(markovHistory, max_birth_count, cur_frame_birth_count):
+                    if (not markovHistory in max_birth_count) or \
+                       cur_frame_birth_count > max_birth_count[markovHistory]:
+                        max_birth_count[markovHistory] = cur_frame_birth_count
+
+                def update_birth_count_dict(markovHistory, birth_count_dict, cur_frame_birth_count):
+                    """
+                    Add 1 to the frequency of cur_frame_birth_count for the specified markovHistory
+                    in the specified birth_count_dict (one for each type of detection, e.g. regionlets 
+                    and lsvm)
+                    """
+                    if markovHistory in birth_count_dict:
+                        if cur_frame_birth_count in birth_count_dict[markovHistory]:
+                            birth_count_dict[markovHistory][cur_frame_birth_count] += 1
+                        else:
+                            birth_count_dict[markovHistory][cur_frame_birth_count] = 1
+                    else:
+                        birth_count_dict[markovHistory] = {}
+                        birth_count_dict[markovHistory][cur_frame_birth_count] = 1
+
+####DEBUGGING FOR RUNNING WITH ONLY ONE DETECTION SOURCE
+#                assoc_det_count = get_assoc_det_count(self.det_objects1[seq_idx][frame_idx], min_score_det_1, max_score_det_1)
+#                assoc_prv_living_det_count = get_det_count_assoc_w_prv_living(self.det_objects1[seq_idx][frame_idx], self.gt_objects[seq_idx], \
+#                                                frame_idx, min_score_det_1, max_score_det_1)
+#                det_birth_count = get_birth_count(self.det_objects1[seq_idx][frame_idx], \
+#                                            previously_detected_gt_ids, min_score_det_1, max_score_det_1)
+#                unassoc_birth_count = get_unassoc_birth_count(self.gt_objects[seq_idx][frame_idx], \
+#                                            previously_detected_gt_ids, min_score_det_1, max_score_det_1)
+#                all_det_count = len(self.det_objects1[seq_idx][frame_idx])
+#                clutter_det_count = get_clutter_det_count(self.det_objects1[seq_idx][frame_idx], min_score_det_1, max_score_det_1)
+#                cur_living_gt_count = len(self.gt_objects[seq_idx][frame_idx])
+#                prv_living_gt_count = get_prv_living_gt_count(self.gt_objects[seq_idx], frame_idx)
+#                death_count = get_death_count(self.gt_objects[seq_idx], frame_idx)
+#                gt_count_not_emitting = get_cur_living_gt_count_not_emitting(self.gt_objects[seq_idx], frame_idx)
+#
+#                assert(assoc_det_count == det_birth_count + assoc_prv_living_det_count), (assoc_det_count, det_birth_count, assoc_prv_living_det_count)
+#                assert(all_det_count == assoc_det_count + clutter_det_count), (all_det_count, assoc_det_count, clutter_det_count)
+#                assert(cur_living_gt_count == prv_living_gt_count - death_count + det_birth_count + unassoc_birth_count), (cur_living_gt_count, prv_living_gt_count, death_count, det_birth_count, unassoc_birth_count)
+#                assert(cur_living_gt_count == assoc_det_count + gt_count_not_emitting), (cur_living_gt_count, assoc_det_count, gt_count_not_emitting)
+####END DEBUGGING FOR RUNNING WITH ONLY ONE DETECTION SOURCE
+
                 #detections1
                 markovHistory1 = tuple(get_markov_history(self.gt_objects, self.det_objects1, seq_idx, frame_idx, m))
                 if markovHistory1 in markov_history_frame_count1:
@@ -1529,28 +1682,10 @@ class MultiDetections:
                 else:
                     markov_history_frame_count1[markovHistory1] = 1
 
-
-                cur_frame_birth_count1 = 0
-                for det_idx in range(len(self.det_objects1[seq_idx][frame_idx])):
-                    if (not self.det_objects1[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
-                        previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx][det_idx].assoc)
-                        if (self.det_objects1[seq_idx][frame_idx][det_idx].score >= min_score_det_1 and \
-                            self.det_objects1[seq_idx][frame_idx][det_idx].score < max_score_det_1):
-                            cur_frame_birth_count1 += 1
-
-                if (not markovHistory1 in max_birth_count1) or \
-                   cur_frame_birth_count1 > max_birth_count1[markovHistory1]:
-                    max_birth_count1[markovHistory1] = cur_frame_birth_count1
-
-
-                if markovHistory1 in birth_count_dict_det1:
-                    if cur_frame_birth_count1 in birth_count_dict_det1[markovHistory1]:
-                        birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] += 1
-                    else:
-                        birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] = 1
-                else:
-                    birth_count_dict_det1[markovHistory1] = {}
-                    birth_count_dict_det1[markovHistory1][cur_frame_birth_count1] = 1
+                cur_frame_birth_count1 = get_birth_count(self.det_objects1[seq_idx][frame_idx], \
+                                            previously_detected_gt_ids, min_score_det_1, max_score_det_1)
+                update_max_birth_count(markovHistory1, max_birth_count1, cur_frame_birth_count1)
+                update_birth_count_dict(markovHistory1, birth_count_dict_det1, cur_frame_birth_count1)
 
 
                 #detections2
@@ -1560,29 +1695,17 @@ class MultiDetections:
                 else:
                     markov_history_frame_count2[markovHistory2] = 1
 
-                cur_frame_birth_count2 = 0
-                for det_idx in range(len(self.det_objects2[seq_idx][frame_idx])):
-                    if (not self.det_objects2[seq_idx][frame_idx][det_idx].assoc in previously_detected_gt_ids):
-                        previously_detected_gt_ids.append(self.det_objects2[seq_idx][frame_idx][det_idx].assoc)
-                        if (self.det_objects2[seq_idx][frame_idx][det_idx].score >= min_score_det_2 and \
-                            self.det_objects2[seq_idx][frame_idx][det_idx].score < max_score_det_2):
-                            cur_frame_birth_count2 += 1
+                cur_frame_birth_count2 = get_birth_count(self.det_objects2[seq_idx][frame_idx], \
+                                            previously_detected_gt_ids, min_score_det_2, max_score_det_2)
+                update_max_birth_count(markovHistory2, max_birth_count2, cur_frame_birth_count2)
+                update_birth_count_dict(markovHistory2, birth_count_dict_det2, cur_frame_birth_count2)
 
 
-                if (not markovHistory2 in max_birth_count2) or \
-                   cur_frame_birth_count2 > max_birth_count2[markovHistory2]:
-                    max_birth_count2[markovHistory2] = cur_frame_birth_count2
 
-
-                if markovHistory2 in birth_count_dict_det2:
-                    if cur_frame_birth_count2 in birth_count_dict_det2[markovHistory2]:
-                        birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] += 1
-                    else:
-                        birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] = 1
-                else:
-                    birth_count_dict_det2[markovHistory2] = {}
-                    birth_count_dict_det2[markovHistory2][cur_frame_birth_count2] = 1
-
+        print "markov_history_frame_count1:"
+        print markov_history_frame_count1
+        print "markov_history_frame_count2:"
+        print markov_history_frame_count2
 
         all_birth_probabilities_det1 = {}
         all_birth_probabilities_det2 = {}
@@ -1649,6 +1772,10 @@ class MultiDetections:
 
         assert (type(all_birth_probabilities_det1) == dict), (type(all_birth_probabilities_det1), all_birth_probabilities_det1)
         assert (type(all_birth_probabilities_det2) == dict), (type(all_birth_probabilities_det2), all_birth_probabilities_det2)
+
+        print '%'*80
+        print all_birth_probabilities_det1
+        print '%'*80
         return (all_birth_probabilities_det1, all_birth_probabilities_det2)
 
 
@@ -2557,7 +2684,7 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     print "HELLO#7"
 
     (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
-        lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
+        lsvm_score_intervals, multi_detections.get_all_probabilities_score_range)
 
 #Now handled in MultiDetections.get_birth_probabilities_score_range
 #    if(doctor_birth_probs):
@@ -2615,7 +2742,7 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     print "HELLO#7"
 
     (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
-        regionlets_score_intervals, multi_detections.get_birth_probabilities_score_range)
+        regionlets_score_intervals, multi_detections.get_all_probabilities_score_range)
 
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
@@ -2632,6 +2759,14 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
 
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
+def get_binned_mlt_diff(mlt_diff):
+    if mlt_diff in [-1, 0, 1]:
+        return mlt_diff
+    elif mlt_diff > 1:
+        return 2
+    else:
+        assert(mlt_diff < -1)
+        return -2
 
 
 def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
@@ -2651,7 +2786,9 @@ def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
             markovHistory.append(float("inf"))
         else:    
             meas_count = len(det_objects[seq_idx][frame_idx - time_offset])
-            markovHistory.append(meas_count - lt_count)
+            mlt_diff = meas_count - lt_count
+            binned_diff = get_binned_mlt_diff(mlt_diff)
+            markovHistory.append(binned_diff)
 
     return markovHistory
 
