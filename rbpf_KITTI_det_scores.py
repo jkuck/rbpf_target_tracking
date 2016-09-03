@@ -673,11 +673,11 @@ class Particle:
 		child_particle.importance_weight = self.importance_weight
 		child_particle.targets = self.targets.create_child()
 
-		child_particle.markovBirthCounts = self.markovBirthCounts 
+		child_particle.markovBirthCounts = copy.deepcopy(self.markovBirthCounts)
+		child_particle.meas1MarkovHistory = copy.deepcopy(self.meas1MarkovHistory)
+		child_particle.meas2MarkovHistory = copy.deepcopy(self.meas2MarkovHistory)
+		child_particle.livTargCountMarkovHistory = copy.deepcopy(self.livTargCountMarkovHistory)
 
-		child_particle.meas1MarkovHistory = self.meas1MarkovHistory
-		child_particle.meas2MarkovHistory = self.meas2MarkovHistory
-		child_particle.livTargCountMarkovHistory = self.livTargCountMarkovHistory
 		return child_particle
 
 	def create_new_target(self, measurement, width, height, cur_time):
@@ -1125,8 +1125,23 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 			prv_birth_count = sum(self.markovBirthCounts)
 			#SHOULD ONLY BE USED THIS WAY WITH A SINGLE SCORE INTERVAL!!
+			assert(cur_score_index < len(clutter_count_priors)), (cur_score_index, clutter_count_priors)
+			assert(cur_score_index >= 0), cur_score_index
+			assert(closestMarkovHistory in clutter_count_priors[cur_score_index]), (closestMarkovHistory, clutter_count_priors[cur_score_index], cur_score_index)
+			assert(cur_score_index < len(clutter_counts_by_score)), (cur_score_index, clutter_counts_by_score)
+			assert(clutter_counts_by_score[cur_score_index] < len(clutter_count_priors[cur_score_index][closestMarkovHistory])), (clutter_counts_by_score[cur_score_index], cur_score_index, clutter_count_priors[cur_score_index][closestMarkovHistory], closestMarkovHistory)
+			assert(clutter_counts_by_score[cur_score_index] >= 0), (clutter_counts_by_score[cur_score_index])
+			
+
+			#This is kind of hacky, but if we had more births in the previous time steps than
+			#allowed by the markov history, simply assign a small probability
+			if prv_birth_count+birth_counts_by_score[cur_score_index] >= len(birth_count_priors[cur_score_index][closestMarkovHistory]):
+				cur_birth_count_prior = .00000001
+			else:
+				cur_birth_count_prior = birth_count_priors[cur_score_index][closestMarkovHistory][prv_birth_count+birth_counts_by_score[cur_score_index]]
+
 			assoc_prior *= target_emission_probs[cur_score_index]**(meas_counts_by_score[cur_score_index]) \
-							  *birth_count_priors[cur_score_index][closestMarkovHistory][prv_birth_count+birth_counts_by_score[cur_score_index]] \
+							  * cur_birth_count_prior\
 							  *clutter_count_priors[cur_score_index][closestMarkovHistory][clutter_counts_by_score[cur_score_index]] \
 						  
 
@@ -1371,13 +1386,24 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		num_targets_killed = len(dead_target_indices)
 		assert(self.targets.living_count == original_num_targets + num_targets_born - num_targets_killed)
 		#done checking if something funny is happening
+		
+#		print '-'*20
+#		print "update_particle_with_measurement called, print before updating markovBirthCounts, frame_idx =", frame_idx, " num_targets_born =", num_targets_born,
+#		print "markovBirthCounts =", self.markovBirthCounts
 
-		birth_count = measurement_associations.count(birth_value)
-		self.markovBirthCounts.append(birth_count)
+
+		self.markovBirthCounts.append(num_targets_born)
 		if frame_idx >= BIRTH_CLUTTER_MARKOV_ORDER - 1:
 			self.markovBirthCounts.popleft()
-			assert(len(self.markovBirthCounts) == BIRTH_CLUTTER_MARKOV_ORDER - 1), (len(self.markovBirthCounts), BIRTH_CLUTTER_MARKOV_ORDER - 1)
-	 	
+			assert(len(self.markovBirthCounts) == BIRTH_CLUTTER_MARKOV_ORDER - 1), (len(self.markovBirthCounts), BIRTH_CLUTTER_MARKOV_ORDER - 1, frame_idx)
+		print '-'*20
+		print "update_particle_with_measurement called, print after updating markovBirthCounts, frame_idx =", frame_idx, " num_targets_born =", num_targets_born,
+		print "markovBirthCounts =", self.markovBirthCounts
+		print "self.meas1MarkovHistory =", meas1MarkovHistory
+		print "self.meas2MarkovHistory =", meas2MarkovHistory
+		print "self.livTargCountMarkovHistory =", livTargCountMarkovHistory
+
+
 		self.update_livTargCountMarkovHistory()
 
 		return new_target
