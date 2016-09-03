@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = 'birth_clutter_BinningMarkovOrder2'
+CUR_EXPERIMENT_BATCH_NAME = 'birth_clutter_BinningMarkovOrder3'
 RUN_EVALUATION = True
 
 

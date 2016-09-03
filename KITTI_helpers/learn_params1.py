@@ -21,7 +21,7 @@ import pickle
 
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
-BIRTH_CLUTTER_MARKOV_ORDER = 2
+BIRTH_CLUTTER_MARKOV_ORDER = 3
 #load ground truth data and detection data, when available, from saved pickle file
 #to cut down on load time
 USE_PICKLED_DATA = True
