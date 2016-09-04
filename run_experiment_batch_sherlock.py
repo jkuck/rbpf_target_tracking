@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = '9_03_comparisons/Rto0_4xQ'
+CUR_EXPERIMENT_BATCH_NAME = '9_03_comparisons/Rto0_4xQ_max1MeasUpdate'
 RUN_EVALUATION = True
 
 

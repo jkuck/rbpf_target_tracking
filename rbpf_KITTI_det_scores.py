@@ -47,6 +47,10 @@ from run_experiment_batch_sherlock import get_description_of_run
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
 
+#if true only update a target with at most one measurement
+#(i.e. not regionlets and then lsvm)
+MAX_1_MEAS_UPDATE = True
+
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
 #######run on these sequences
@@ -257,6 +261,8 @@ class Target:
 		#if target's predicted location is offscreen, set to True and then kill
 		self.offscreen = False
 
+		self.updated_this_time_instance = False
+
 	def near_border(self):
 		near_border = False
 		x1 = self.x[0][0] - self.width/2.0
@@ -296,6 +302,7 @@ class Target:
 		assert(self.x.shape == (4, 1)), (self.x.shape, np.dot(K, residual).shape)
 
 		self.all_states[-1] = (self.x, self.width, self.height)
+		self.updated_this_time_instance = True
 
 	def kf_predict(self, dt, cur_time):
 		"""
@@ -322,6 +329,7 @@ class Target:
 			self.offscreen = True
 
 		assert(self.x.shape == (4, 1))
+		self.updated_this_time_instance = False
 
 
 
@@ -1228,9 +1236,10 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			elif((meas_assoc >= 0) and (meas_assoc < birth_value)):
 				assert(meas_source_index >= 0 and meas_source_index < len(SCORE_INTERVALS)), (meas_source_index, len(SCORE_INTERVALS), SCORE_INTERVALS)
 				assert(meas_index >= 0 and meas_index < len(measurement_scores)), (meas_index, len(measurement_scores), measurement_scores)
-				score_index = get_score_index(SCORE_INTERVALS[meas_source_index], measurement_scores[meas_index])
-				self.targets.living_targets[meas_assoc].kf_update(measurements[meas_index], widths[meas_index], \
-					heights[meas_index], cur_time, MEAS_NOISE_COVS[meas_source_index][score_index])
+				if not (MAX_1_MEAS_UPDATE and self.targets.living_targets[meas_assoc].updated_this_time_instance):
+					score_index = get_score_index(SCORE_INTERVALS[meas_source_index], measurement_scores[meas_index])
+					self.targets.living_targets[meas_assoc].kf_update(measurements[meas_index], widths[meas_index], \
+									heights[meas_index], cur_time, MEAS_NOISE_COVS[meas_source_index][score_index])
 			else:
 				#otherwise the measurement was associated with clutter
 				assert(meas_assoc == -1), ("meas_assoc = ", meas_assoc)
