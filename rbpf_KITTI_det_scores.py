@@ -861,15 +861,6 @@ class Particle:
 		remaining_meas_count = len(measurement_list)
 		for (index, cur_meas) in enumerate(measurement_list):
 			score_index = get_score_index(SCORE_INTERVALS[meas_source_index], measurement_scores[index])
-
-
-#			assert(meas_source_index in BIRTH_PROBABILITIES), (meas_source_index, BIRTH_PROBABILITIES)
-#			assert(score_index in BIRTH_PROBABILITIES[meas_source_index]), (meas_source_index, BIRTH_PROBABILITIES, BIRTH_PROBABILITIES[meas_source_index])
-
-			closestMarkovHistory = self.get_closest_markov_history(BIRTH_PROBABILITIES[meas_source_index][score_index], \
-															  	   CLUTTER_PROBABILITIES[meas_source_index][score_index], \
-															  	   meas_source_index)
-
 			#create proposal distribution for the current measurement
 			#compute target association proposal probabilities
 			proposal_distribution_list = []
@@ -881,7 +872,7 @@ class Particle:
 					targ_likelihoods_summed_over_meas += self.memoized_assoc_likelihood(measurement_list[meas_index], meas_source_index, target_index,  MEAS_NOISE_COVS[meas_source_index][temp_score_index], temp_score_index)
 				if((targ_likelihoods_summed_over_meas != 0.0) and (not target_index in list_of_measurement_associations)\
 					and p_target_deaths[target_index] < 1.0):
-					cur_target_prior = TARGET_EMISSION_PROBS[meas_source_index][score_index][closestMarkovHistory]*cur_target_likelihood \
+					cur_target_prior = TARGET_EMISSION_PROBS[meas_source_index][score_index]*cur_target_likelihood \
 									  /targ_likelihoods_summed_over_meas
 #					cur_target_prior = P_TARGET_EMISSION*cur_target_likelihood \
 #									  /targ_likelihoods_summed_over_meas
@@ -892,6 +883,9 @@ class Particle:
 
 
 
+			closestMarkovHistory = self.get_closest_markov_history(BIRTH_PROBABILITIES[meas_source_index][score_index], \
+															  	   CLUTTER_PROBABILITIES[meas_source_index][score_index], \
+															  	   meas_source_index)
 
 	
 
@@ -1165,12 +1159,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 #			assert(0 <= clutter_counts_by_score[i] and clutter_counts_by_score[i] < len(clutter_count_priors[i])), (clutter_counts_by_score[i], len(clutter_count_priors[i]), i, len(score_intervals))
 #			assert(0 <= birth_counts_by_score[i] and birth_counts_by_score[i] < len(birth_count_priors[i])), birth_counts_by_score[i]
 
-		#ONLY SAFE TO USE WITH 1 SCORE INTERVAL !!
-		closestMarkovHistory = self.get_closest_markov_history(birth_count_priors[0], \
-																   clutter_count_priors[0], \
-																   meas_source_index)
-		#ONLY SAFE TO USE WITH 1 SCORE INTERVAL !!
-		p_target_does_not_emit = 1.0 - target_emission_probs[0][closestMarkovHistory]
+		p_target_does_not_emit = 1.0 - sum(target_emission_probs)
 		assoc_prior = (p_target_does_not_emit)**(unobserved_target_count) \
 					  /count_meas_orderings(number_measurements, observed_target_count, \
 						  					birth_count, clutter_count)
@@ -1200,7 +1189,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 			else:
 				cur_birth_count_prior = birth_count_priors[cur_score_index][closestMarkovHistory][prv_birth_count+birth_counts_by_score[cur_score_index]]
 
-			assoc_prior *= target_emission_probs[cur_score_index][closestMarkovHistory]**(meas_counts_by_score[cur_score_index]) \
+			assoc_prior *= target_emission_probs[cur_score_index]**(meas_counts_by_score[cur_score_index]) \
 							  * cur_birth_count_prior\
 							  *clutter_count_priors[cur_score_index][closestMarkovHistory][clutter_counts_by_score[cur_score_index]] \
 						  
@@ -1210,7 +1199,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		if total_prior == 0:
 			for i in range(len(score_intervals)):
 				print "for score interval beginning at", score_intervals[i]
-				print "target emmission prob =", target_emission_probs[i][closestMarkovHistory]**(meas_counts_by_score[i])
+				print "target emmission prob =", target_emission_probs[i]**(meas_counts_by_score[i])
 				print "birth prior=", birth_count_priors[i][closestMarkovHistory][birth_counts_by_score[i]] 
 				print "clutter prior=", clutter_count_priors[i][closestMarkovHistory][clutter_counts_by_score[i]] 
 
