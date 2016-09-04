@@ -83,7 +83,7 @@ class trackingEvaluation(object):
              missed         - number of missed targets (FN)
     """
 
-    def __init__(self, det_path, seq_idx_to_eval, gt_path="./KITTI_helpers/data/training_ground_truth", min_overlap=0.5, max_truncation = 0.15, cls="car"):
+    def __init__(self, det_path, seq_idx_to_eval, corrected_version = True, gt_path="./KITTI_helpers/data/training_ground_truth", min_overlap=0.5, max_truncation = 0.15, cls="car"):
         # get number of sequences and
         # get number of frames per sequence from test mapping
         # (created while extracting the benchmark)
@@ -106,6 +106,7 @@ class trackingEvaluation(object):
         self.cls = cls
 
         # data and parameter
+        self.corrected_version = corrected_version
         self.gt_path           = os.path.join(gt_path, "label_02")
 #        self.t_sha             = t_sha
         self.t_path            = det_path
@@ -488,9 +489,15 @@ class trackingEvaluation(object):
                 tmpfn   += len(g)-len(association_matrix)-ignoredfn
                 self.fn += len(g)-len(association_matrix)-ignoredfn
                 # false positives = tracker bboxes - associated tracker bboxes
-                # mismatches (mme_t) 
-                tmpfp   += len(t) - tmptp - nignoredtracker - nignoredtp
-                self.fp += len(t) - tmptp - nignoredtracker - nignoredtp
+                if self.corrected_version:
+                    # mismatches (mme_t)
+                    tmpfp   += len(t) - tmptp - nignoredtp
+                    self.fp += len(t) - tmptp - nignoredtp
+                else:
+                    # mismatches (mme_t) 
+                    tmpfp   += len(t) - tmptp - nignoredtracker - nignoredtp
+                    self.fp += len(t) - tmptp - nignoredtracker - nignoredtp
+
                 # append single distance values
                 self.distance.append(this_cost)
 
@@ -511,10 +518,17 @@ class trackingEvaluation(object):
                     print "ign GT", ignoredfn
                     print "ign TP", nignoredtp
                     raise NameError("Something went wrong! nGroundtruth is not TP+FN")
-                if tmptp+tmpfp+nignoredtracker+nignoredtp is not len(t):
-                    print seq_idx, f, len(t), tmptp, tmpfp
-                    print len(association_matrix), association_matrix
-                    raise NameError("Something went wrong! nTracker is not TP+FP")
+                if self.corrected_version:
+                    if tmptp+tmpfp+nignoredtp is not len(t):
+                        print seq_idx, f, len(t), tmptp, tmpfp
+                        print len(association_matrix), association_matrix
+                        raise NameError("Something went wrong! nTracker is not TP+FP")
+
+                else:
+                    if tmptp+tmpfp+nignoredtracker+nignoredtp is not len(t):
+                        print seq_idx, f, len(t), tmptp, tmpfp
+                        print len(association_matrix), association_matrix
+                        raise NameError("Something went wrong! nTracker is not TP+FP")
 
                 # check for id switches or fragmentations
                 for i,tt in enumerate(this_ids[0]):
@@ -586,7 +600,10 @@ class trackingEvaluation(object):
                     self.fragments += 1
 
                 # compute MT/PT/ML
-                tracking_ratio = tracked/float(len(g))
+                if self.corrected_version:
+                    tracking_ratio = tracked / float(len(g) - sum(ign_g))
+                else:
+                    tracking_ratio = tracked/float(len(g))
                 if tracking_ratio > 0.8:
                     tmpMT   += 1
                     self.MT += 1
@@ -798,12 +815,12 @@ class trackingEvaluation(object):
         self.printSep()
         dump.close()
 
-def evaluate(det_path, seq_idx_to_eval, class_to_eval = "car"):
+def evaluate(det_path, seq_idx_to_eval, corrected_version = True, class_to_eval = "car"):
     # start evaluation and instanciated eval object
 #    mail.msg("Processing Result for KITTI Tracking Benchmark")
     print "Evaluating class ", class_to_eval
 
-    e = trackingEvaluation(det_path, seq_idx_to_eval,cls=class_to_eval)
+    e = trackingEvaluation(det_path, seq_idx_to_eval,corrected_version=corrected_version,cls=class_to_eval)
     # load tracker data and check provided classes
     if not e.loadTracker():
         print "loadTracker failed for class: ", class_to_eval
@@ -874,7 +891,7 @@ def print_multi_run_metrics(packed_metrics, number_of_runs):
      
         print "="*80
 
-def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
+def eval_results(all_run_results, seq_idx_to_eval, use_corrected_eval=True, info_by_run=None):
     """
     Inputs:
     - seq_idx_to_eval: a list of sequence indices to evaluate
@@ -900,7 +917,7 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
     number_of_runs = 0
     for cur_run_results in glob.iglob(all_run_results + "/*"): # + operator used for string concatenation!
         if os.path.isdir(cur_run_results):
-            cur_run_metrics = evaluate(cur_run_results + "/", seq_idx_to_eval) # + operator used for string concatenation!
+            cur_run_metrics = evaluate(cur_run_results + "/", seq_idx_to_eval, corrected_version=use_corrected_eval) # + operator used for string concatenation!
             orig_metrics_len = len(cur_run_metrics)
             #append run info, if given, to evaluation metrics
             if info_by_run:
@@ -933,3 +950,37 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
     print "done evaluating results!"
     return number_of_runs
 
+def find_and_eval_results(directory_to_search, seq_idx_to_eval=[i for i in range(21)], info_by_run=None):
+    """
+    Inputs:
+    - seq_idx_to_eval: a list of sequence indices to evaluate
+    - directory_to_search: string, director name to begin search from (e.g. '/Users/jkuck/rotation3/pykalman')
+    """
+
+    for filename in os.listdir(directory_to_search):
+        if filename == 'results_by_run':
+            stdout = sys.stdout
+            sys.stdout = open(directory_to_search + '/OLD_evaluation_metrics.txt', 'w')
+
+            eval_results(directory_to_search + "/results_by_run", seq_idx_to_eval, use_corrected_eval=False) # + operateor used for string concatenation!
+
+            sys.stdout.close()
+            sys.stdout = stdout
+
+            stdout = sys.stdout
+            sys.stdout = open(directory_to_search + '/NEW_evaluation_metrics.txt', 'w')
+
+            eval_results(directory_to_search + "/results_by_run", seq_idx_to_eval, use_corrected_eval=True) # + operateor used for string concatenation!
+
+            sys.stdout.close()
+            sys.stdout = stdout
+        elif os.path.isdir(directory_to_search + '/' + filename):
+            find_and_eval_results(directory_to_search + '/' + filename, seq_idx_to_eval, info_by_run)
+
+if __name__ == "__main__":
+    if len(sys.argv)!=2:
+        print "Supply the directory to search"
+        sys.exit(1);
+
+    directory_to_search = sys.argv[1]
+    find_and_eval_results(directory_to_search)
