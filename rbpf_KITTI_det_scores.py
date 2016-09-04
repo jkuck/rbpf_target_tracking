@@ -167,8 +167,8 @@ P_default = np.array([[40.64558317, 0, 			 0, 0],
 #from learn_params1, not counting 'ignored' ground truth
 #R_default = np.array([[ 40.64558317,   0.14036472],
 # 					  [  0.14036472,   5.56278505]])
-R_default = np.array([[ 0.1,   0.0],
- 					  [ 0.0,   0.1]])
+R_default = np.array([[ 0.0,   0.0],
+ 					  [ 0.0,   0.0]])
 
 
 #learned from all GT
@@ -182,7 +182,7 @@ Q_default = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.2281353
  					  [  -5.50458177,  -13.37640528,    4.56034398,    9.48945108],
  					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314]])
 
-#Q_default = 4*Q_default
+Q_default = 4*Q_default
 
 #measurement function matrix
 H = np.array([[1.0,  0.0, 0.0, 0.0],
