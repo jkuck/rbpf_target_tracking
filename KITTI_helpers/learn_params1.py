@@ -24,6 +24,9 @@ SKIP_LEARNING_Q = True
 BIRTH_CLUTTER_MARKOV_ORDER = 1
 #load ground truth data and detection data, when available, from saved pickle file
 #to cut down on load time
+#CAUTION!!, delete the pickled data directory if changing things, for instance the gtObject class
+#or else will get this error:
+#AttributeError: gtObject instance has no attribute 'associated_det1'
 USE_PICKLED_DATA = True
 PICKELD_DATA_DIRECTORY = "./KITTI_helpers/learn_params1_pickled_data"
 
@@ -110,6 +113,11 @@ class gtObject:
             self.near_border = True
         else:
             self.near_border = False
+
+        #set to true if this gtObject is associated with a detection from source 1
+        self.associated_det1 = False
+        #set to true if this gtObject is associated with a detection from source 2
+        self.associated_det2 = False
 
 class detObject:
     def __init__(self, x1, x2, y1, y2, assoc, score):
@@ -1239,7 +1247,7 @@ class MultiDetections:
                                     self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.append(cur_det)
                                 else:
                                     self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = [cur_det]
-
+                                self.gt_objects[seq_idx][frame_idx][gt_idx].associated_det1 = True
                         assert(match_found == True)
 
         assert(len(self.gt_objects) == len(self.det_objects2))
@@ -1261,6 +1269,8 @@ class MultiDetections:
                                     self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection.append(cur_det)
                                 else:
                                     self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = [cur_det]
+                                self.gt_objects[seq_idx][frame_idx][gt_idx].associated_det2 = True
+
 
                         assert(match_found == True)
 
@@ -1510,6 +1520,32 @@ class MultiDetections:
         markov_history_frame_count1 = {}
         markov_history_frame_count2 = {}
 
+        #target_emission_counts1[list_i] = j means that gt targets that occur in a frame with a 
+        #markovHistory of list_j emitted a total of j measurements from source 1 (Regionlets)
+        target_emission_counts1 = defaultdict(int)
+        #target_emission_counts2[list_i] = j means that gt targets that occur in a frame with a 
+        #markovHistory of list_j emitted a total of j measurements from source 2 (LSVM)
+        target_emission_counts2 = defaultdict(int)
+        #target_counts[list_i] = j means that a total of j gt targets occur in frames with a 
+        #markovHistory of list_j 
+        target_counts = defaultdict(int)
+
+        #border_death_count[list_i] = j means that j targets die near the border in a frame with
+        #a markovHistory of list_j
+        border_death_count = defaultdict(int)
+        #not_border_death_count[list_i] = j means that j targets die NOT near the border in a 
+        #frame with a markovHistory of list_j
+        not_border_death_count = defaultdict(int)
+        #target_counts_prv_time_near_border[list_i] = j means that a total of j gt targets are near the border and occur in frames  
+        #preceding frames with a markovHistory of list_j (for calculating death probs)
+        target_counts_prv_time_near_border = defaultdict(int)
+
+        #target_counts_prv_time_not_near_border[list_i] = j means that a total of j gt targets are not near the border and occur occur in frames  
+        #preceding frames with a markovHistory of list_j (for calculating death probs)
+        target_counts_prv_time_not_near_border = defaultdict(int)
+
+
+
 
         living_target_freq_for_deciding_on_binning = defaultdict(int)
 
@@ -1598,29 +1634,46 @@ class MultiDetections:
                             clutter_count += 1       
                     return clutter_count
 
-                def get_prv_living_gt_count(gt_objects, frame_idx):
+                def get_prv_living_gt_count(gt_objects, frame_idx, near_border=False):
                     """
                     Return the number of gt objects BIRTH_CLUTTER_MARKOV_ORDER time instances ago
+                    Inputs:
+                    - near_border: boolean, specify whether or not gt_object is near border or not
                     """
                     if frame_idx < BIRTH_CLUTTER_MARKOV_ORDER:
                         return 0
                     else:
-                        return len(gt_objects[frame_idx - BIRTH_CLUTTER_MARKOV_ORDER])
+                        gt_count = 0
+                        for cur_gt_object in gt_objects[frame_idx - BIRTH_CLUTTER_MARKOV_ORDER]:
+                            if cur_gt_object.near_border == near_border:
+                                gt_count+=1
+                        return gt_count
 
-                def get_cur_living_gt_count_not_emitting(gt_objects, frame_idx):
+                def get_cur_living_gt_count_not_emitting(gt_objects, frame_idx, source):
                     """
                     Return the number of currently living gt objects that did not emit a measurement
+                    Inputs:
+                    -source: specify which source we are checking for emission
                     """
                     living_gt_count_not_emitting = 0
-                    for gt_object in gt_objects[frame_idx]:
-                        if gt_object.associated_detection == None:
-                            living_gt_count_not_emitting += 1
+                    assert(source in [1,2])
+                    if source == 1:
+                        for gt_object in gt_objects[frame_idx]:
+                            if not gt_object.associated_det1:
+                                living_gt_count_not_emitting += 1
+                    else:
+                        for gt_object in gt_objects[frame_idx]:
+                            if not gt_object.associated_det2:
+                                living_gt_count_not_emitting += 1                        
                     return living_gt_count_not_emitting
    
 
-                def get_death_count(gt_objects, frame_idx):
+                def get_death_count(gt_objects, frame_idx, near_border):
                     """
                     Return the number of gt objects that have died since BIRTH_CLUTTER_MARKOV_ORDER time instances ago
+                    Inputs:
+                    -near_border: boolean, specify whether to get death count for objects
+                    near the border or not near the border
                     """
                     death_count = 0
                     if frame_idx < BIRTH_CLUTTER_MARKOV_ORDER:
@@ -1631,7 +1684,8 @@ class MultiDetections:
                             currently_living_gt_ids.append(gt_object.track_id)
 
                         for gt_object in gt_objects[frame_idx - BIRTH_CLUTTER_MARKOV_ORDER]:
-                            if not gt_object.track_id in currently_living_gt_ids:
+                            if not gt_object.track_id in currently_living_gt_ids and \
+                               gt_object.near_border == near_border:
                                 death_count += 1
                         return death_count
 
@@ -1708,6 +1762,24 @@ class MultiDetections:
                 update_max_birth_count(markovHistory2, max_birth_count2, cur_frame_birth_count2)
                 update_birth_count_dict(markovHistory2, birth_count_dict_det2, cur_frame_birth_count2)
 
+                #target emission counts USING MARKOVHISTORY1 ONLY !!
+                cur_gt_count = len(self.gt_objects[seq_idx][frame_idx])
+                cur_gt_count_not_emitting_det1 = get_cur_living_gt_count_not_emitting(self.gt_objects[seq_idx], frame_idx, source=1)
+                cur_gt_count_not_emitting_det2 = get_cur_living_gt_count_not_emitting(self.gt_objects[seq_idx], frame_idx, source=2)
+                cur_gt_count_emitting_det1 = cur_gt_count - cur_gt_count_not_emitting_det1
+                cur_gt_count_emitting_det2 = cur_gt_count - cur_gt_count_not_emitting_det2
+                assert(cur_gt_count_emitting_det1 >= 0)
+                assert(cur_gt_count_emitting_det2 >= 0)
+                target_emission_counts1[markovHistory1] += cur_gt_count_emitting_det1
+                target_emission_counts2[markovHistory1] += cur_gt_count_emitting_det2
+                target_counts[markovHistory1] += cur_gt_count
+
+                #death counts USING MARKOVHISTORY1 ONLY !!
+                border_death_count[markovHistory1] += get_death_count(self.gt_objects[seq_idx], frame_idx, near_border=True)
+                not_border_death_count[markovHistory1] += get_death_count(self.gt_objects[seq_idx], frame_idx, near_border=False)
+
+                target_counts_prv_time_near_border[markovHistory1] += get_prv_living_gt_count(self.gt_objects[seq_idx], frame_idx, near_border=True)
+                target_counts_prv_time_not_near_border[markovHistory1] += get_prv_living_gt_count(self.gt_objects[seq_idx], frame_idx, near_border=False)
 
 
         print "markov_history_frame_count1:"
@@ -1718,7 +1790,60 @@ class MultiDetections:
         print "living_target_freq_for_deciding_on_binning:"
         print living_target_freq_for_deciding_on_binning
 
+
+        #Calculate target emission probabilities
+        target_emission_probabilities_det1 = {}
+        for cur_markov_history in target_emission_counts1:
+            assert(cur_markov_history in target_counts)
+            target_emission_probabilities_det1[cur_markov_history] = float(target_emission_counts1[cur_markov_history]) \
+                                                               /float(target_counts[cur_markov_history])
+
+        print "target_emission_probabilities_det1:"
+        print target_emission_probabilities_det1
+
+        target_emission_probabilities_det2 = {}
+        for cur_markov_history in target_emission_counts2:
+            assert(cur_markov_history in target_counts)
+            target_emission_probabilities_det2[cur_markov_history] = float(target_emission_counts2[cur_markov_history]) \
+                                                               /float(target_counts[cur_markov_history])
+
+        print "target_emission_probabilities_det2:"
+        print target_emission_probabilities_det2
+
+
+        #Calculate death probabilities
+        border_death_probs = {}
+        not_border_death_probs = {}
+        for cur_markov_history in target_counts_prv_time_near_border:
+            assert(cur_markov_history in target_counts_prv_time_not_near_border)
+            assert(cur_markov_history in border_death_count)
+            assert(cur_markov_history in not_border_death_count)
+            if target_counts_prv_time_near_border[cur_markov_history] == 0:
+                border_death_probs[cur_markov_history] = 0.0
+                assert(cur_markov_history[0] == 0) #only time this should occur is when there where 0 targets alive on previous time instance
+                assert(border_death_count[cur_markov_history] == 0)
+            else:
+                border_death_probs[cur_markov_history] = float(border_death_count[cur_markov_history]) \
+                                                    /float(target_counts_prv_time_near_border[cur_markov_history])
+
+            if target_counts_prv_time_not_near_border[cur_markov_history] == 0:
+                not_border_death_probs[cur_markov_history] = 0.0
+                assert(cur_markov_history[0] == 0) #only time this should occur is when there where 0 targets alive on previous time instance
+                assert(not_border_death_count[cur_markov_history] == 0)
+            else:
+                not_border_death_probs[cur_markov_history] = float(not_border_death_count[cur_markov_history]) \
+                                                        /float(target_counts_prv_time_not_near_border[cur_markov_history])
+
+
+
+        print "border_death_probs:"
+        print border_death_probs
+
+        print "not_border_death_probs:"
+        print not_border_death_probs
         #sleep(5)
+
+
 
         all_birth_probabilities_det1 = {}
         all_birth_probabilities_det2 = {}
@@ -1789,7 +1914,7 @@ class MultiDetections:
         print '%'*80
         print all_birth_probabilities_det1
         print '%'*80
-        return (all_birth_probabilities_det1, all_birth_probabilities_det2)
+        return (all_birth_probabilities_det1, all_birth_probabilities_det2, target_emission_probabilities_det1, target_emission_probabilities_det2)
 
 
     def NOT_CONDITIONED_ON_MEAS_LT_DIFF_get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
@@ -2696,22 +2821,29 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects, training_sequences)
     print "HELLO#7"
 
-    (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
-        lsvm_score_intervals, multi_detections.get_all_probabilities_score_range)
+    #only can be used with 1 score interval !!
+    assert(len(regionlets_score_intervals)==1)
+    assert(len(lsvm_score_intervals)==1)
+#    (birth_probabilities_regionlets, birth_probabilities_lsvm, emission_probs_markov) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
+#        lsvm_score_intervals, multi_detections.get_all_probabilities_score_range)
+
+    (birth_probabilities_regionlets, birth_probabilities_lsvm, emission_probs_markov_regionlets, emission_probs_markov_lsvm) = multi_detections.get_all_probabilities_score_range(regionlets_score_intervals[0], float("inf"), lsvm_score_intervals[0], float("inf"))
 
 #Now handled in MultiDetections.get_birth_probabilities_score_range
 #    if(doctor_birth_probs):
 #        doctor_birth_probabilities(birth_probabilities_regionlets)
 #        doctor_birth_probabilities(birth_probabilities_lsvm)
 #
-    birth_probabilities = [birth_probabilities_regionlets, birth_probabilities_lsvm]
+    birth_probabilities = [[birth_probabilities_regionlets], [birth_probabilities_lsvm]]
+    emission_probs_markov = [[emission_probs_markov_regionlets], [emission_probs_markov_lsvm]]
     print "HELLO#8"
 
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
 
-    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+#    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+    return (returnTargSets, emission_probs_markov, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
 def get_meas_target_sets_regionlets_general_format(training_sequences, regionlets_score_intervals, \
     obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
@@ -2754,8 +2886,15 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects, training_sequences)
     print "HELLO#7"
 
-    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
-        regionlets_score_intervals, multi_detections.get_all_probabilities_score_range)
+
+    #only can be used with 1 score interval !!
+    assert(len(regionlets_score_intervals)==1)
+
+
+    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense, emission_probs_markov_regionlets, emission_probs_markov_lsvm_nonsense) = multi_detections.get_all_probabilities_score_range(regionlets_score_intervals[0], float("inf"), regionlets_score_intervals[0], float("inf"))
+
+#    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense, emission_probs_markov) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
+#        regionlets_score_intervals, multi_detections.get_all_probabilities_score_range)
 
     (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
@@ -2767,10 +2906,16 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
 
 ########## CLEAN THIS UP END
 
-    birth_probabilities = [birth_probabilities_regionlets]
+    birth_probabilities = [[birth_probabilities_regionlets]]
+    emission_probs_markov = [[emission_probs_markov_regionlets]]
+
     print "HELLO#8"
 
-    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+#    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+    return (returnTargSets, emission_probs_markov, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+
+
+
 
 def get_binned_mlt_diff(mlt_diff):
     if mlt_diff in [-1, 0, 1]:
@@ -2783,13 +2928,15 @@ def get_binned_mlt_diff(mlt_diff):
 
 def get_binned_lt_count(lt_count):
     #bin living target counts
-    if lt_count < 5:
+    if lt_count == 0:
         return lt_count
-    elif lt_count in [5,6]:
-        return 5
+    elif lt_count in [1,2]:
+        return 1
+    elif lt_count in [3,4]:
+        return 3
     else:
-        assert(lt_count > 6)
-        return 6
+        assert(lt_count > 4)
+        return 5
 
 def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
     """

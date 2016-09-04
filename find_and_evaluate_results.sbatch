@@ -22,7 +22,7 @@ source venv/bin/activate
 #pip install filterpy
 #pip install munkres
 
-search_directory='/scratch/users/kuck/rbpf_results/9_03_comparisons'
+search_directory='/scratch/users/kuck/rbpf_results/9_04_comparisons'
 
 python KITTI_helpers/jdk_helper_evaluate_results.py $search_directory
 
