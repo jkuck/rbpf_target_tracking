@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = '9_04_comparisons/Rto0_4xQ_birthClutterEmissionLivTarMeasMarkovOrder1_max1update_binnedLTcount'
+CUR_EXPERIMENT_BATCH_NAME = '9_04_comparisons/Rto0_4xQ_birthClutterEmissionDeathLivTarMeasMarkovOrder1_max1update_binnedLTcount'
 #CUR_EXPERIMENT_BATCH_NAME = 'binning_test'
 RUN_EVALUATION = False
 

@@ -1544,8 +1544,8 @@ class MultiDetections:
         #preceding frames with a markovHistory of list_j (for calculating death probs)
         target_counts_prv_time_not_near_border = defaultdict(int)
 
-
-
+        unassoc_gt_near_border_count = defaultdict(int)
+        unassoc_gt_not_near_border_count = defaultdict(int)
 
         living_target_freq_for_deciding_on_binning = defaultdict(int)
 
@@ -1648,6 +1648,18 @@ class MultiDetections:
                             if cur_gt_object.near_border == near_border:
                                 gt_count+=1
                         return gt_count
+
+                def get_cur_living_unassoc_gt_count(gt_objects, frame_idx, near_border):
+                    """
+                    Return the number of currently living gt objects that did not emit a measurement
+                    Inputs:
+                    """
+                    living_unassoc_gt_count = 0
+                    for gt_object in gt_objects[frame_idx]:
+                        if gt_object.associated_detection == None \
+                           and gt_object.near_border == near_border:
+                            living_unassoc_gt_count += 1
+                    return living_unassoc_gt_count        
 
                 def get_cur_living_gt_count_not_emitting(gt_objects, frame_idx, source):
                     """
@@ -1781,6 +1793,8 @@ class MultiDetections:
                 target_counts_prv_time_near_border[markovHistory1] += get_prv_living_gt_count(self.gt_objects[seq_idx], frame_idx, near_border=True)
                 target_counts_prv_time_not_near_border[markovHistory1] += get_prv_living_gt_count(self.gt_objects[seq_idx], frame_idx, near_border=False)
 
+                unassoc_gt_near_border_count[markovHistory1] += get_cur_living_unassoc_gt_count(self.gt_objects[seq_idx], frame_idx, near_border = True)
+                unassoc_gt_not_near_border_count[markovHistory1] += get_cur_living_unassoc_gt_count(self.gt_objects[seq_idx], frame_idx, near_border = False)
 
         print "markov_history_frame_count1:"
         print markov_history_frame_count1
@@ -1823,16 +1837,20 @@ class MultiDetections:
                 assert(cur_markov_history[0] == 0) #only time this should occur is when there where 0 targets alive on previous time instance
                 assert(border_death_count[cur_markov_history] == 0)
             else:
+#                border_death_probs[cur_markov_history] = float(border_death_count[cur_markov_history]) \
+#                                                    /float(target_counts_prv_time_near_border[cur_markov_history])
                 border_death_probs[cur_markov_history] = float(border_death_count[cur_markov_history]) \
-                                                    /float(target_counts_prv_time_near_border[cur_markov_history])
+                                                    /float(unassoc_gt_near_border_count[cur_markov_history] + border_death_count[cur_markov_history])
 
             if target_counts_prv_time_not_near_border[cur_markov_history] == 0:
                 not_border_death_probs[cur_markov_history] = 0.0
                 assert(cur_markov_history[0] == 0) #only time this should occur is when there where 0 targets alive on previous time instance
                 assert(not_border_death_count[cur_markov_history] == 0)
             else:
+#                not_border_death_probs[cur_markov_history] = float(not_border_death_count[cur_markov_history]) \
+#                                                        /float(target_counts_prv_time_not_near_border[cur_markov_history])
                 not_border_death_probs[cur_markov_history] = float(not_border_death_count[cur_markov_history]) \
-                                                        /float(target_counts_prv_time_not_near_border[cur_markov_history])
+                                                        /float(unassoc_gt_not_near_border_count[cur_markov_history] + not_border_death_count[cur_markov_history])
 
 
 
@@ -1914,7 +1932,8 @@ class MultiDetections:
         print '%'*80
         print all_birth_probabilities_det1
         print '%'*80
-        return (all_birth_probabilities_det1, all_birth_probabilities_det2, target_emission_probabilities_det1, target_emission_probabilities_det2)
+        return (all_birth_probabilities_det1, all_birth_probabilities_det2, target_emission_probabilities_det1, \
+            target_emission_probabilities_det2, border_death_probs, not_border_death_probs)
 
 
     def NOT_CONDITIONED_ON_MEAS_LT_DIFF_get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
@@ -2827,7 +2846,8 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
 #    (birth_probabilities_regionlets, birth_probabilities_lsvm, emission_probs_markov) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
 #        lsvm_score_intervals, multi_detections.get_all_probabilities_score_range)
 
-    (birth_probabilities_regionlets, birth_probabilities_lsvm, emission_probs_markov_regionlets, emission_probs_markov_lsvm) = multi_detections.get_all_probabilities_score_range(regionlets_score_intervals[0], float("inf"), lsvm_score_intervals[0], float("inf"))
+    (birth_probabilities_regionlets, birth_probabilities_lsvm, emission_probs_markov_regionlets, emission_probs_markov_lsvm, \
+        death_probs_near_border, death_probs_not_near_border) = multi_detections.get_all_probabilities_score_range(regionlets_score_intervals[0], float("inf"), lsvm_score_intervals[0], float("inf"))
 
 #Now handled in MultiDetections.get_birth_probabilities_score_range
 #    if(doctor_birth_probs):
@@ -2838,8 +2858,8 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     emission_probs_markov = [[emission_probs_markov_regionlets], [emission_probs_markov_lsvm]]
     print "HELLO#8"
 
-    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
-    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+#    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+#    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
 
 #    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
@@ -2891,13 +2911,14 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     assert(len(regionlets_score_intervals)==1)
 
 
-    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense, emission_probs_markov_regionlets, emission_probs_markov_lsvm_nonsense) = multi_detections.get_all_probabilities_score_range(regionlets_score_intervals[0], float("inf"), regionlets_score_intervals[0], float("inf"))
+    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense, emission_probs_markov_regionlets, emission_probs_markov_lsvm_nonsense, \
+        death_probs_near_border, death_probs_not_near_border) = multi_detections.get_all_probabilities_score_range(regionlets_score_intervals[0], float("inf"), regionlets_score_intervals[0], float("inf"))
 
 #    (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense, emission_probs_markov) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
 #        regionlets_score_intervals, multi_detections.get_all_probabilities_score_range)
 
-    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
-    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+#    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+#    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
 #Now handled in MultiDetections.get_birth_probabilities_score_range
 #    if(doctor_birth_probs):

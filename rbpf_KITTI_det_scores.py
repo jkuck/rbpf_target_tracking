@@ -369,7 +369,7 @@ class Target:
 ####################				   - gdtrc(theta_death, alpha_death, cur_time - last_assoc + time_step)
 ####################		death_prob /= gdtrc(theta_death, alpha_death, cur_time - last_assoc)
 ####################		return death_prob
-	def target_death_prob(self, cur_time, prev_time):
+	def target_death_prob(self, cur_time, prev_time, num_regionlets_meas, my_particle):
 		""" Calculate the target death probability if this was the only target.
 		Actual target death probability will be (return_val/number_of_targets)
 		because we limit ourselves to killing a max of one target per measurement.
@@ -394,20 +394,30 @@ class Target:
 		if(self.offscreen == True):
 			cur_death_prob = 1.0
 		else:
+
+			markovHistory = my_particle.get_closest_markov_history_for_death_prob(num_regionlets_meas)
+
 			frames_since_last_assoc = int(round((cur_time - self.last_measurement_association)/default_time_step))
 			assert(abs(float(frames_since_last_assoc) - (cur_time - self.last_measurement_association)/default_time_step) < .00000001)
+
 			if(self.near_border()):
-				if frames_since_last_assoc < len(BORDER_DEATH_PROBABILITIES):
-					cur_death_prob = BORDER_DEATH_PROBABILITIES[frames_since_last_assoc]
-				else:
-					cur_death_prob = BORDER_DEATH_PROBABILITIES[-1]
-#					cur_death_prob = 1.0
+				cur_death_prob = BORDER_DEATH_PROBABILITIES[markovHistory]
 			else:
-				if frames_since_last_assoc < len(NOT_BORDER_DEATH_PROBABILITIES):
-					cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[frames_since_last_assoc]
-				else:
-					cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[-1]
+				cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[markovHistory]
+
 #					cur_death_prob = 1.0
+#			if(self.near_border()):
+#				if frames_since_last_assoc < len(BORDER_DEATH_PROBABILITIES):
+#					cur_death_prob = BORDER_DEATH_PROBABILITIES[frames_since_last_assoc]
+#				else:
+#					cur_death_prob = BORDER_DEATH_PROBABILITIES[-1]
+##					cur_death_prob = 1.0
+#			else:
+#				if frames_since_last_assoc < len(NOT_BORDER_DEATH_PROBABILITIES):
+#					cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[frames_since_last_assoc]
+#				else:
+#					cur_death_prob = NOT_BORDER_DEATH_PROBABILITIES[-1]
+##					cur_death_prob = 1.0
 
 		assert(cur_death_prob >= 0.0 and cur_death_prob <= 1.0), cur_death_prob
 		return cur_death_prob
@@ -647,18 +657,46 @@ class Particle:
 			difference += abs(markovHistory1[i] - markovHistory2[i])
 		return difference
 
+	def get_closest_markov_history_for_death_prob(self, num_regionlets_meas):
+		binned_lt_count = get_binned_lt_count(self.livTargCountMarkovHistory[1])
+		binned_diff = get_binned_mlt_diff(num_regionlets_meas - self.livTargCountMarkovHistory[1])
+
+		binnedMarkovHistory = [binned_lt_count, binned_diff]
+
+		binnedMarkovHistory = tuple(binnedMarkovHistory)
+
+		if binnedMarkovHistory in BORDER_DEATH_PROBABILITIES:
+			global EXACT_MARKOV_HISTORY_MATCHES
+			EXACT_MARKOV_HISTORY_MATCHES+=1			
+			assert(binnedMarkovHistory in NOT_BORDER_DEATH_PROBABILITIES)
+			return binnedMarkovHistory
+		else:
+			global INEXACT_MARKOV_HISTORY_MATCHES
+			INEXACT_MARKOV_HISTORY_MATCHES+=1				
+			closestMarkovHistory = BORDER_DEATH_PROBABILITIES.iterkeys().next()
+			smallestDiff = self.markov_history_difference(binnedMarkovHistory, closestMarkovHistory)
+			for curMarkovHistory in BORDER_DEATH_PROBABILITIES:
+				curDiff = self.markov_history_difference(binnedMarkovHistory, curMarkovHistory)
+				if curDiff < smallestDiff:
+					closestMarkovHistory = curMarkovHistory
+					smallestDiff = curDiff
+			assert(closestMarkovHistory in NOT_BORDER_DEATH_PROBABILITIES)
+			return closestMarkovHistory
+
 	def get_closest_markov_history(self, birth_probs, clutter_probs, det_idx):
 		binned_lt_count = get_binned_lt_count(self.livTargCountMarkovHistory[1])
 		if det_idx == 0:
-			exactMarkovHistory = [binned_lt_count] + list(self.meas1MarkovHistory) #+ operator used for list concatenation!
+			exact_mltDiff_MarkovHistory = list(self.meas1MarkovHistory) 
 		else:
 			assert(det_idx == 1)
-			exactMarkovHistory = [binned_lt_count] + list(self.meas2MarkovHistory) #+ operator used for list concatenation!
+			exact_mltDiff_MarkovHistory = list(self.meas2MarkovHistory) 
 
-		binnedMarkovHistory = []
-		for mlt_diff in exactMarkovHistory:
+		binned_mltDiff_MarkovHistory = []
+		for mlt_diff in exact_mltDiff_MarkovHistory:
 			binned_diff = get_binned_mlt_diff(mlt_diff)
-			binnedMarkovHistory.append(binned_diff)
+			binned_mltDiff_MarkovHistory.append(binned_diff)
+
+		binnedMarkovHistory = [binned_lt_count] + binned_mltDiff_MarkovHistory #+ operator used for list concatenation!
 		binnedMarkovHistory = tuple(binnedMarkovHistory)
 
 		if binnedMarkovHistory in birth_probs:
@@ -694,9 +732,9 @@ class Particle:
 	def create_new_target(self, measurement, width, height, cur_time):
 		self.targets.create_new_target(measurement, width, height, cur_time)
 
-	def update_target_death_probabilities(self, cur_time, prev_time):
+	def update_target_death_probabilities(self, cur_time, prev_time, num_regionlets_meas):
 		for target in self.targets.living_targets:
-			target.death_prob = target.target_death_prob(cur_time, prev_time)
+			target.death_prob = target.target_death_prob(cur_time, prev_time, num_regionlets_meas, self)
 
 	def sample_target_deaths(self):
 		"""
@@ -1618,7 +1656,9 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 					target.kf_predict(dt, time_stamp)
 				#update particle death probabilities AFTER kf_predict so that targets that moved
 				#off screen this time instance will be killed
-				particle.update_target_death_probabilities(time_stamp, prev_time_stamp)
+				num_regionlets_meas = len(measurement_lists[0])
+				assert(num_regionlets_meas == len(widths[0]))
+				particle.update_target_death_probabilities(time_stamp, prev_time_stamp, num_regionlets_meas)
 
 		new_target_list = [] #for debugging, list of booleans whether each particle created a new target
 		for particle in particle_set:
