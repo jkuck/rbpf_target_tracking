@@ -1510,6 +1510,9 @@ class MultiDetections:
         markov_history_frame_count1 = {}
         markov_history_frame_count2 = {}
 
+
+        living_target_freq_for_deciding_on_binning = defaultdict(int)
+
         assert(len(self.det_objects1) == len(self.det_objects2))
         for seq_idx in self.training_sequences:
             assert(len(self.det_objects1[seq_idx]) == len(self.det_objects2[seq_idx]))
@@ -1523,7 +1526,6 @@ class MultiDetections:
                         previously_detected_gt_ids.append(gt_object.track_id)
 
                 total_frame_count += 1
-
 
                 def get_birth_count(detections, previously_detected_gt_ids, min_score, max_score):
                     """
@@ -1654,6 +1656,10 @@ class MultiDetections:
                         birth_count_dict[markovHistory] = {}
                         birth_count_dict[markovHistory][cur_frame_birth_count] = 1
 
+###TESTING
+                living_target_freq_for_deciding_on_binning[get_prv_living_gt_count(self.gt_objects[seq_idx], frame_idx)] += 1
+###DONE TESTING
+
 ####DEBUGGING FOR RUNNING WITH ONLY ONE DETECTION SOURCE
 #                assoc_det_count = get_assoc_det_count(self.det_objects1[seq_idx][frame_idx], min_score_det_1, max_score_det_1)
 #                assoc_prv_living_det_count = get_det_count_assoc_w_prv_living(self.det_objects1[seq_idx][frame_idx], self.gt_objects[seq_idx], \
@@ -1675,7 +1681,8 @@ class MultiDetections:
 #                assert(cur_living_gt_count == assoc_det_count + gt_count_not_emitting), (cur_living_gt_count, assoc_det_count, gt_count_not_emitting)
 ####END DEBUGGING FOR RUNNING WITH ONLY ONE DETECTION SOURCE
 
-                #detections1
+                #detections1 
+                #birth counts
                 markovHistory1 = tuple(get_markov_history(self.gt_objects, self.det_objects1, seq_idx, frame_idx, m))
                 if markovHistory1 in markov_history_frame_count1:
                     markov_history_frame_count1[markovHistory1] += 1
@@ -1688,7 +1695,8 @@ class MultiDetections:
                 update_birth_count_dict(markovHistory1, birth_count_dict_det1, cur_frame_birth_count1)
 
 
-                #detections2
+                #detections2 
+                #birth counts
                 markovHistory2 = tuple(get_markov_history(self.gt_objects, self.det_objects2, seq_idx, frame_idx, m))
                 if markovHistory2 in markov_history_frame_count2:
                     markov_history_frame_count2[markovHistory2] += 1
@@ -1706,6 +1714,11 @@ class MultiDetections:
         print markov_history_frame_count1
         print "markov_history_frame_count2:"
         print markov_history_frame_count2
+
+        print "living_target_freq_for_deciding_on_binning:"
+        print living_target_freq_for_deciding_on_binning
+
+        #sleep(5)
 
         all_birth_probabilities_det1 = {}
         all_birth_probabilities_det2 = {}
@@ -2768,6 +2781,15 @@ def get_binned_mlt_diff(mlt_diff):
         assert(mlt_diff < -1)
         return -2
 
+def get_binned_lt_count(lt_count):
+    #bin living target counts
+    if lt_count < 5:
+        return lt_count
+    elif lt_count in [5,6]:
+        return 5
+    else:
+        assert(lt_count > 6)
+        return 6
 
 def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
     """
@@ -2776,7 +2798,7 @@ def get_markov_history(gt_objects, det_objects, seq_idx, frame_idx, m):
 
     """
     if frame_idx >= m: #get the number of living targets m time steps ago
-        lt_count = len(gt_objects[seq_idx][frame_idx - m])
+        lt_count = get_binned_lt_count(len(gt_objects[seq_idx][frame_idx - m]))
     else: #set to 0 if frame_idx < m
         lt_count = 0
 

@@ -2,7 +2,7 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=1
+NUM_RUNS=3
 SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [11]
 #SEQUENCES_TO_PROCESS = [0]
@@ -10,8 +10,9 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = '9_03_comparisons/Rto0_4xQ_birthAndClutterLivTarMeasMarkovOrder1_max1update'
-RUN_EVALUATION = True
+CUR_EXPERIMENT_BATCH_NAME = '9_04_comparisons/Rto0_4xQ_birthAndClutterLivTarMeasMarkovOrder1_max1update_binnedLTcount'
+#CUR_EXPERIMENT_BATCH_NAME = 'binning_test'
+RUN_EVALUATION = False
 
 
 

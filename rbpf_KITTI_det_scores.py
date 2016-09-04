@@ -28,6 +28,7 @@ from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
 from learn_params1 import BIRTH_CLUTTER_MARKOV_ORDER
 from learn_params1 import get_binned_mlt_diff
+from learn_params1 import get_binned_lt_count
 
 from jdk_helper_evaluate_results import eval_results
 
@@ -647,11 +648,12 @@ class Particle:
 		return difference
 
 	def get_closest_markov_history(self, birth_probs, clutter_probs, det_idx):
+		binned_lt_count = get_binned_lt_count(self.livTargCountMarkovHistory[1])
 		if det_idx == 0:
-			exactMarkovHistory = [self.livTargCountMarkovHistory[1]] + list(self.meas1MarkovHistory) #+ operator used for list concatenation!
+			exactMarkovHistory = [binned_lt_count] + list(self.meas1MarkovHistory) #+ operator used for list concatenation!
 		else:
 			assert(det_idx == 1)
-			exactMarkovHistory = [self.livTargCountMarkovHistory[1]] + list(self.meas2MarkovHistory) #+ operator used for list concatenation!
+			exactMarkovHistory = [binned_lt_count] + list(self.meas2MarkovHistory) #+ operator used for list concatenation!
 
 		binnedMarkovHistory = []
 		for mlt_diff in exactMarkovHistory:
