@@ -1544,10 +1544,52 @@ class MultiDetections:
         #preceding frames with a markovHistory of list_j (for calculating death probs)
         target_counts_prv_time_not_near_border = defaultdict(int)
 
+#######BEGIN CHECK CORRELATIONS
+
+        #check whether lsvm and regionlets emissions are dependent
+        lsvm_emission_count = 0
+        regionlets_emission_count = 0
+        lsvm_and_regionlets_emission_count = 0
+        all_gt_targets_count = 0
+
+        #check covariance between lsvm and regionlets clutter counts
+        lsvm_and_regionlets_clutter_counts = []
+
+        regionletsMeasCount_and_gtCount = []
+        lsvmMeasCount_and_gtCount = []
+        regionletsPlusLsvmMeasCount_and_gtCount = []
+
+        #check correlation between (#detections - #gt on previous time instance) and
+        #(number of births)
+        regionlets_birth = []
+        lsvm_birth = []
+        regionletsAndLSVM_birth = []
+
+        #check correlation between (#detections - #gt on previous time instance) and
+        #(number of clutter)
+        regionlets_clutter = []
+        lsvm_clutter = []
+        regionletsAndLSVM_clutter = []        
+
+        #check correlation between (#detections - #gt on previous time instance) and
+        #(number of death)
+        regionlets_death = []
+        lsvm_death = []
+        regionletsAndLSVM_death = []  
 
 
+        #check correlation between (#detections - #gt on previous time instance) and
+        #(emission prob)
+        regionlets_emissionProb = []
+        lsvm_emissionProb = []
+        regionletsAndLSVM_emissionProb = []  
+
+        birth_x_locations = []
+        birth_y_locations = []
+#######END CHECK CORRELATIONS
 
         living_target_freq_for_deciding_on_binning = defaultdict(int)
+
 
         assert(len(self.det_objects1) == len(self.det_objects2))
         for seq_idx in self.training_sequences:
@@ -1556,10 +1598,34 @@ class MultiDetections:
             #contains ids of all ground truth tracks that have been previously associated with a detection
             previously_detected_gt_ids = []
             for frame_idx in range(len(self.det_objects1[seq_idx])):
-                if frame_idx >= m:
-                    previously_detected_gt_ids = []
-                    for gt_object in self.gt_objects[seq_idx][frame_idx-m]:
-                        previously_detected_gt_ids.append(gt_object.track_id)
+
+
+
+#                if frame_idx >= m:
+#                    previously_detected_gt_ids = []
+#                    for gt_object in self.gt_objects[seq_idx][frame_idx-m]:
+#                        previously_detected_gt_ids.append(gt_object.track_id)
+
+                if frame_idx > 0:
+                    this_frame_gt_ids = []
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                        this_frame_gt_ids.append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx-1])):
+                        cur_gt_id = self.gt_objects[seq_idx][frame_idx-1][gt_idx].track_id
+                        #removed detected gt objects that have died from previously_detected_gt_ids
+                        #to allow for rebirth
+                        if not(cur_gt_id in this_frame_gt_ids) and cur_gt_id in previously_detected_gt_ids:
+                            previously_detected_gt_ids.remove(cur_gt_id)
+                            assert(not cur_gt_id in previously_detected_gt_ids)
+                    for det_idx in range(len(self.det_objects1[seq_idx][frame_idx-1])):
+                        if (not self.det_objects1[seq_idx][frame_idx-1][det_idx].assoc in previously_detected_gt_ids):
+                            previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx-1][det_idx].assoc)
+                    for det_idx in range(len(self.det_objects2[seq_idx][frame_idx-1])):
+                        if (not self.det_objects2[seq_idx][frame_idx-1][det_idx].assoc in previously_detected_gt_ids):
+                            previously_detected_gt_ids.append(self.det_objects2[seq_idx][frame_idx-1][det_idx].assoc)
+
+
 
                 total_frame_count += 1
 
@@ -1735,6 +1801,135 @@ class MultiDetections:
 #                assert(cur_living_gt_count == assoc_det_count + gt_count_not_emitting), (cur_living_gt_count, assoc_det_count, gt_count_not_emitting)
 ####END DEBUGGING FOR RUNNING WITH ONLY ONE DETECTION SOURCE
 
+#######BEGIN CHECK CORRELATIONS
+                #check whether lsvm and regionlets emissions are dependent
+                cur_frame_regionlets_emission_count = 0
+                cur_frame_lsvm_emission_count = 0
+                cur_frame_gt_count = 0
+                for gt_object in self.gt_objects[seq_idx][frame_idx]:
+                    all_gt_targets_count += 1
+                    cur_frame_gt_count += 1
+                    if gt_object.associated_det1:
+                        regionlets_emission_count += 1
+                        cur_frame_regionlets_emission_count += 1
+                    if gt_object.associated_det2:
+                        lsvm_emission_count += 1
+                        cur_frame_lsvm_emission_count += 1
+                    if gt_object.associated_det1 and gt_object.associated_det2:
+                        lsvm_and_regionlets_emission_count += 1
+
+                #check covariance between lsvm and regionlets clutter counts
+                cur_regionlets_clutter_count = 0
+                for regionlets_det in self.det_objects1[seq_idx][frame_idx]:
+                    if regionlets_det.assoc == -1:
+                        cur_regionlets_clutter_count += 1
+                cur_lsvm_clutter_count = 0
+                for lsvm_det in self.det_objects2[seq_idx][frame_idx]:
+                    if lsvm_det.assoc == -1:
+                        cur_lsvm_clutter_count += 1
+                lsvm_and_regionlets_clutter_counts.append(np.array([cur_regionlets_clutter_count, 
+                                                                    cur_lsvm_clutter_count]))
+
+                regionletsCount = len(self.det_objects1[seq_idx][frame_idx])
+                lsvmCount = len(self.det_objects2[seq_idx][frame_idx])
+                gtCount = len(self.gt_objects[seq_idx][frame_idx])
+
+                regionletsMeasCount_and_gtCount.append(np.array([regionletsCount, 
+                                                                    gtCount]))
+                lsvmMeasCount_and_gtCount.append(np.array([lsvmCount, 
+                                                                    gtCount]))
+                regionletsPlusLsvmMeasCount_and_gtCount.append(np.array([regionletsCount+lsvmCount, 
+                                                                    gtCount]))
+
+
+                #check correlation between (#detections - #gt on previous time instance) and
+                #(number of births)
+
+                def get_total_birth_count(seq_gt_objects, frame_idx):
+                    """
+                    Get the number of associated births in the specified detections
+                    """
+                    gt_objects_prv_time = []
+                    if frame_idx != 0:
+                        for gt_object in seq_gt_objects[frame_idx-1]:
+                            gt_objects_prv_time.append(gt_object.track_id)
+
+                    cur_frame_birth_count = 0
+                    for gt_object in seq_gt_objects[frame_idx]:
+#                        if(gt_object.associated_detection != None and \
+#                           not gt_object.track_id in gt_objects_prv_time):
+#                        if(not gt_object.track_id in gt_objects_prv_time):
+                        if(gt_object.associated_detection != None and \
+                           not gt_object.track_id in previously_detected_gt_ids):
+
+                            cur_frame_birth_count += 1
+                    return cur_frame_birth_count
+
+                if frame_idx == 0:
+                    gt_prv_time_count = 0
+                    regionlets_prv_time_count = 0
+                    lsvm_prv_time_count = 0
+                else:
+                    gt_prv_time_count = len(self.gt_objects[seq_idx][frame_idx-1])
+                    regionlets_prv_time_count = len(self.det_objects1[seq_idx][frame_idx-1])
+                    lsvm_prv_time_count = len(self.det_objects2[seq_idx][frame_idx-1])
+
+
+
+                cur_total_birthCount = get_total_birth_count(self.gt_objects[seq_idx], frame_idx)
+                cur_regionlets_birthCount = get_birth_count(self.det_objects1[seq_idx][frame_idx], \
+                                            previously_detected_gt_ids, min_score_det_1, max_score_det_1)
+                cur_lsvm_birthCount = get_birth_count(self.det_objects2[seq_idx][frame_idx], \
+                                            previously_detected_gt_ids, min_score_det_2, max_score_det_2)
+                regionlets_birth.append(np.array([regionletsCount - regionlets_prv_time_count, 
+                                                                    cur_regionlets_birthCount]))
+                lsvm_birth.append(np.array([lsvmCount - lsvm_prv_time_count, 
+                                                                    cur_lsvm_birthCount]))
+                regionletsAndLSVM_birth.append(np.array([regionletsCount + lsvmCount - regionlets_prv_time_count - lsvm_prv_time_count, 
+                                                                    cur_total_birthCount]))
+
+
+                #check correlation between (#detections - #gt on previous time instance) and
+                #(number of clutter)
+                regionlets_clutter.append(np.array([regionletsCount - gt_prv_time_count, 
+                                                                    cur_regionlets_clutter_count]))
+                lsvm_clutter.append(np.array([lsvmCount - gt_prv_time_count, 
+                                                                    cur_lsvm_clutter_count]))
+                regionletsAndLSVM_clutter.append(np.array([regionletsCount + lsvmCount - gt_prv_time_count, 
+                                                                    cur_regionlets_clutter_count + cur_lsvm_clutter_count]))
+
+                #check correlation between (#detections - #gt on previous time instance) and
+                #(number of death)
+
+                #death count since BIRTH_CLUTTER_MARKOV_ORDER time ago, careful this is set to 1 or change other stuff too
+                cur_death_count = get_death_count(self.gt_objects[seq_idx], frame_idx, near_border = False) 
+
+
+                regionlets_death.append(np.array([regionletsCount - gt_prv_time_count, 
+                                                                    cur_death_count]))
+                lsvm_death.append(np.array([lsvmCount - gt_prv_time_count, 
+                                                                    cur_death_count]))
+                regionletsAndLSVM_death.append(np.array([regionletsCount + lsvmCount - gt_prv_time_count, 
+                                                                    cur_death_count]))
+
+
+                #check correlation between (#detections - #gt on previous time instance) and
+                #(number of death)
+                if cur_frame_gt_count != 0:
+                    regionletEmissionProb = float(cur_frame_regionlets_emission_count)/float(cur_frame_gt_count)
+                    lsvmEmissionProb = float(cur_frame_lsvm_emission_count)/float(cur_frame_gt_count)
+                    regionlets_emissionProb.append(np.array([regionletsCount - gt_prv_time_count, 
+                                                                        regionletEmissionProb]))
+                    lsvm_emissionProb.append(np.array([lsvmCount - gt_prv_time_count, 
+                                                                        lsvmEmissionProb]))
+                    regionletsAndLSVM_emissionProb.append(np.array([regionletsCount + lsvmCount - gt_prv_time_count, 
+                                                                            regionletEmissionProb]))
+
+#######END CHECK CORRELATIONS
+
+
+
+
                 #detections1 
                 #birth counts
                 markovHistory1 = tuple(get_markov_history(self.gt_objects, self.det_objects1, seq_idx, frame_idx, m))
@@ -1841,7 +2036,91 @@ class MultiDetections:
 
         print "not_border_death_probs:"
         print not_border_death_probs
-        #sleep(5)
+
+
+#######BEGIN CHECK CORRELATIONS
+
+        print "probability of regionlets emission =", float(regionlets_emission_count)/float(all_gt_targets_count)
+        print "probability of lsvm emission =", float(lsvm_emission_count)/float(all_gt_targets_count)
+        print "probability of regionlets and lsvm emission =", float(lsvm_and_regionlets_emission_count)/float(all_gt_targets_count)
+      
+        regionlets_lsvm_clutter_count_corrcoef = np.corrcoef(np.asarray(lsvm_and_regionlets_clutter_counts).T)
+        print "regionlets_lsvm_clutter_count_corrcoef: "
+        print regionlets_lsvm_clutter_count_corrcoef
+
+
+
+
+        regionlets_gt_counts_corrcoef = np.corrcoef(np.asarray(regionletsMeasCount_and_gtCount).T)
+        lsvm_gt_counts_corrcoef = np.corrcoef(np.asarray(lsvmMeasCount_and_gtCount).T)
+        regionletsPluslsvm_gt_counts_corrcoef = np.corrcoef(np.asarray(regionletsPlusLsvmMeasCount_and_gtCount).T)
+
+        print "regionlets_gt_counts_corrcoef:"
+        print regionlets_gt_counts_corrcoef
+
+        print "lsvm_gt_counts_corrcoef:"
+        print lsvm_gt_counts_corrcoef
+
+        print "regionletsPluslsvm_gt_counts_corrcoef:"
+        print regionletsPluslsvm_gt_counts_corrcoef
+
+        regionlets_birth_corrcoef = np.corrcoef(np.asarray(regionlets_birth).T)
+        lsvm_birth_corrcoef = np.corrcoef(np.asarray(lsvm_birth).T)
+        regionletsAndLSVM_birth_corrcoef = np.corrcoef(np.asarray(regionletsAndLSVM_birth).T)
+
+        print "regionlets_birth_corrcoef:"
+        print regionlets_birth_corrcoef
+
+        print "lsvm_birth_corrcoef:"
+        print lsvm_birth_corrcoef
+
+        print "regionletsAndLSVM_birth_corrcoef:"
+        print regionletsAndLSVM_birth_corrcoef 
+
+
+        regionlets_clutter_corrcoef = np.corrcoef(np.asarray(regionlets_clutter).T)
+        lsvm_clutter_corrcoef = np.corrcoef(np.asarray(lsvm_clutter).T)
+        regionletsAndLSVM_clutter_corrcoef = np.corrcoef(np.asarray(regionletsAndLSVM_clutter).T)
+
+        print "regionlets_clutter_corrcoef:"
+        print regionlets_clutter_corrcoef
+
+        print "lsvm_clutter_corrcoef:"
+        print lsvm_clutter_corrcoef
+
+        print "regionletsAndLSVM_clutter_corrcoef:"
+        print regionletsAndLSVM_clutter_corrcoef 
+
+
+        regionlets_death_corrcoef = np.corrcoef(np.asarray(regionlets_death).T)
+        lsvm_death_corrcoef = np.corrcoef(np.asarray(lsvm_death).T)
+        regionletsAndLSVM_death_corrcoef = np.corrcoef(np.asarray(regionletsAndLSVM_death).T)
+
+        print "regionlets_death_corrcoef:"
+        print regionlets_death_corrcoef
+
+        print "lsvm_death_corrcoef:"
+        print lsvm_death_corrcoef
+
+        print "regionletsAndLSVM_death_corrcoef:"
+        print regionletsAndLSVM_death_corrcoef 
+
+
+        regionlets_emission_corrcoef = np.corrcoef(np.asarray(regionlets_emissionProb).T)
+        lsvm_emission_corrcoef = np.corrcoef(np.asarray(lsvm_emissionProb).T)
+        regionletsAndLSVM_emission_corrcoef = np.corrcoef(np.asarray(regionletsAndLSVM_emissionProb).T)
+
+        print "regionlets_emission_corrcoef:"
+        print regionlets_emission_corrcoef
+
+        print "lsvm_emission_corrcoef:"
+        print lsvm_emission_corrcoef
+
+        print "regionletsAndLSVM_emission_corrcoef:"
+        print regionletsAndLSVM_emission_corrcoef 
+#######END CHECK CORRELATIONS
+
+        sleep(5)
 
 
 
