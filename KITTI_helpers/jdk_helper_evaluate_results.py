@@ -357,9 +357,9 @@ class trackingEvaluation(object):
 #        for seq_idx in range(len(self.groundtruth)):
 #        for seq_idx in [6, 7, 8, 9, 10, 11, 15, 16, 17, 18, 19, 20]:
         for seq_idx in self.seq_idx_to_eval:
-            seq_gt           = self.groundtruth[seq_idx]
-            seq_dc           = self.dcareas[seq_idx]
-            seq_tracker      = self.tracker[seq_idx]
+            seq_gt           = self.groundtruth[0]
+            seq_dc           = self.dcareas[0]
+            seq_tracker      = self.tracker[0]
             seq_trajectories = defaultdict(list)
             seq_ignored      = defaultdict(list)
             seqtp            = 0
@@ -541,8 +541,8 @@ class trackingEvaluation(object):
                 self.MODP_t.append(MODP_t)
 
             # remove empty lists for current gt trajectories
-            self.gt_trajectories[seq_idx]  = seq_trajectories
-            self.ign_trajectories[seq_idx] = seq_ignored
+            self.gt_trajectories[0]  = seq_trajectories
+            self.ign_trajectories[0] = seq_ignored
 
         # compute MT/PT/ML, fragments, idswitches for all groundtruth trajectories
         n_ignored_tr_total = 0
@@ -644,7 +644,7 @@ class trackingEvaluation(object):
             self.MODP = "n/a"
         else:
             self.MODP = sum(self.MODP_t)/float(sum(self.n_frames))
-        return True
+        return self.MOTA
 
     def print_results(self):
 #       print "tracking evaluation summary".center(80,"=")
@@ -816,13 +816,11 @@ def evaluate(det_path, seq_idx_to_eval, class_to_eval = "car"):
     # sanity checks
     if len(e.groundtruth) is not len(e.tracker):
         return False
-    if not e.compute3rdPartyMetrics():
-        print("Error evaluating results")
-        print "Did not evaluate 3party metrics!"
-        return False
+    MOTA = e.compute3rdPartyMetrics()
+
 
     print("Thank you for participating in our benchmark!")
-    return e.get_results_as_array()
+    return MOTA
 
 def printEntry(key, vals,width=(43,20)):
     s_out =  key.ljust(width[0])
@@ -932,4 +930,21 @@ def eval_results(all_run_results, seq_idx_to_eval, info_by_run=None):
 
     print "done evaluating results!"
     return number_of_runs
+
+
+def get_MOTA(results_folder, seq_idx_to_eval = [0, 1, 2, 3], info_by_run=None):
+    """
+    Inputs:
+    - seq_idx_to_eval: a list of sequence indices to evaluate
+    - all_run_results: filepath of folder containing folders of results from individual runs (subfolders are where 
+        .txt files are located containing results for each sequence to evaluate)
+    - info_by_run: a list of length equal to the number of runs, where each element is a list containing
+        info from that run (all should be the same length and have the same type of info) if available.
+        If not available, this will be None
+
+    Output:
+    - number_of_runs: the number of runs evaluated over
+    """
+    MOTA = evaluate(results_folder, seq_idx_to_eval) # + operator used for string concatenation!
+    return MOTA
 

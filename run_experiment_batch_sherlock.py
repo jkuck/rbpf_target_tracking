@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = 'debugged_death_probs_3TimeStepsMarkovChain_onlineResults_measNoiseSetTo0'
+CUR_EXPERIMENT_BATCH_NAME = 'gradient_descent_Q_seq20'
 RUN_EVALUATION = True
 
 
