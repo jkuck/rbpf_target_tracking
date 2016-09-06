@@ -650,15 +650,17 @@ class Particle:
 	def get_closest_markov_history(self, birth_probs, clutter_probs, det_idx):
 		binned_lt_count = get_binned_lt_count(self.livTargCountMarkovHistory[1])
 		if det_idx == 0:
-			exactMarkovHistory = [binned_lt_count] + list(self.meas1MarkovHistory) #+ operator used for list concatenation!
+			exact_mltDiff_MarkovHistory = list(self.meas1MarkovHistory) 
 		else:
 			assert(det_idx == 1)
-			exactMarkovHistory = [binned_lt_count] + list(self.meas2MarkovHistory) #+ operator used for list concatenation!
+			exact_mltDiff_MarkovHistory = list(self.meas2MarkovHistory) 
 
-		binnedMarkovHistory = []
-		for mlt_diff in exactMarkovHistory:
+		binned_mltDiff_MarkovHistory = []
+		for mlt_diff in exact_mltDiff_MarkovHistory:
 			binned_diff = get_binned_mlt_diff(mlt_diff)
-			binnedMarkovHistory.append(binned_diff)
+			binned_mltDiff_MarkovHistory.append(binned_diff)
+
+		binnedMarkovHistory = [binned_lt_count] + binned_mltDiff_MarkovHistory #+ operator used for list concatenation!
 		binnedMarkovHistory = tuple(binnedMarkovHistory)
 
 		if binnedMarkovHistory in birth_probs:

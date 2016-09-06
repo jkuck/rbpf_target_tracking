@@ -2,16 +2,16 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=2
-SEQUENCES_TO_PROCESS = [i for i in range(21)]
+NUM_RUNS=1
+#SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [11]
-#SEQUENCES_TO_PROCESS = [0]
+SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results'
 
-CUR_EXPERIMENT_BATCH_NAME = '9_04_comparisons/Rto0_4xQ_birthClutterEmissionLivTarMeasMarkovOrder1_max1update_binnedLTcount'
-#CUR_EXPERIMENT_BATCH_NAME = 'binning_test'
+#CUR_EXPERIMENT_BATCH_NAME = '9_04_comparisons/Rto0_4xQ_birthClutterEmissionLivTarMeasMarkovOrder1_max1update_binnedLTcount_debugged'
+CUR_EXPERIMENT_BATCH_NAME = 'testing_DELETE'
 RUN_EVALUATION = False
 
 
