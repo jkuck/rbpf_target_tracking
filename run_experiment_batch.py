@@ -9,7 +9,7 @@ SEQUENCES_TO_PROCESS = [11]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
-CUR_EXPERIMENT_BATCH_NAME = '100_particle_missing_result_test'
+CUR_EXPERIMENT_BATCH_NAME = '100_particle_missing_result_test_interactiveProfiling'
 RUN_EVALUATION = True
 
 
@@ -108,15 +108,15 @@ def submit_single_experiment(num_particles, include_ignored_gt=False, include_do
 	use_regionlets_and_lsvm=True, sort_dets_on_intervals=True):
 	setup_results_folder(num_particles, include_ignored_gt, include_dontcare_in_gt, \
 					   	 use_regionlets_and_lsvm, sort_dets_on_intervals)
-	for run_idx in range(1, NUM_RUNS+1):
-		for seq_idx in SEQUENCES_TO_PROCESS:
-			submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
-				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
-				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=run_idx, seq_idx=seq_idx, peripheral='run')
-	if RUN_EVALUATION:
-		submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
-				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
-				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=-1, seq_idx=-1, peripheral='evaluate')
+#	for run_idx in range(1, NUM_RUNS+1):
+#		for seq_idx in SEQUENCES_TO_PROCESS:
+#			submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
+#				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
+#				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=run_idx, seq_idx=seq_idx, peripheral='run')
+#	if RUN_EVALUATION:
+#		submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
+#				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
+#				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=-1, seq_idx=-1, peripheral='evaluate')
 
 
 if __name__ == "__main__":

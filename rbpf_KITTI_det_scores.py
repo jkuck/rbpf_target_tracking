@@ -1887,8 +1887,8 @@ if __name__ == "__main__":
 
 			print "Processing sequence: ", seq_idx
 			tA = time.time()
-			(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
-			#estimated_ts = cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
+			#(estimated_ts, cur_seq_info, number_resamplings) = run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])
+			cProfile.run('run_rbpf_on_targetset(measurementTargetSetsBySequence[seq_idx])')
 			print "done processing sequence: ", seq_idx
 			
 			tB = time.time()
@@ -1931,8 +1931,6 @@ if __name__ == "__main__":
 			sys.stdout.close()
 			sys.stdout = stdout
 
-
-			run_complete_f.close()
 
 		print 'end run'
 		sys.exit(0);
