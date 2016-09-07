@@ -81,7 +81,7 @@ default_time_step = .1
 REPLACE_STATE_WITH_MEAUREMENT_AFTER_KF_UPDATE = False
 
 #SCORE_INTERVALS = [i/2.0 for i in range(0, 8)]
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
@@ -170,8 +170,12 @@ P_default = np.array([[40.64558317, 0, 			 0, 0, 0, 0],
 #R_default = np.array([[  5.60121574e+01,  -3.60666228e-02],
 # 					  [ -3.60666228e-02,   1.64772050e+01]])
 #from learn_params1, not counting 'ignored' ground truth
-R_default = np.array([[ 40.64558317,   0.14036472],
- 					  [  0.14036472,   5.56278505]])
+#R_default = np.array([[ 40.64558317,   0.14036472],
+# 					  [  0.14036472,   5.56278505]])
+R_default = np.array([[ 0.1,   0.0, 0.0, 0.0],
+ 					  [ 0.0,   0.1, 0.0, 0.0],
+ 					  [ 0.0,   0.0, 0.1, 0.0],
+ 					  [ 0.0,   0.0, 0.0, 0.1]])
 
 
 #learned from all GT
@@ -205,6 +209,7 @@ Q_default = np.array([[   77.01116942,    96.15519872,    10.43401384,    17.720
  					  [  -10.50160743,  -253.58739897,    69.19005811,  -481.62696962,    270.42818278,    35.20489202],
  					  [   -5.07644774,   -21.4836607 ,    22.56443492,   -29.302417  ,    35.20489202 ,    22.58358119]])
 
+Q_default = 4*Q_default
 #just messing with Q here:
 #Q_default = np.array([[   77.01116942,    96.15519872,    10.43401384,    17.72073786,    -10.50160743,    -5.07644774],
 # 					  [   96.15519872,   353.55520166,   -45.23444807,   441.01208116,   -253.58739897,   -21.4836607 ],
