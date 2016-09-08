@@ -25,6 +25,7 @@ sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
+from learn_params1 import clutter_birth_binned_loc
 from jdk_helper_evaluate_results import eval_results
 
 #from multiple_meas_per_time_assoc_priors import HiddenState
@@ -82,11 +83,10 @@ USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check U
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
-
 
 
 
@@ -666,7 +666,7 @@ class Particle:
 
 
 	def sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(self, measurement_lists, \
-		cur_time, measurement_scores):
+		cur_time, measurement_scores, widths, heights):
 		"""
 		Input:
 		- measurement_lists: a list where measurement_lists[i] is a list of all measurements from the current
@@ -700,7 +700,7 @@ class Particle:
 
 		(targets_to_kill, measurement_associations, proposal_probability, unassociated_target_death_probs) = \
 			self.sample_proposal_distr3(measurement_lists, self.targets.living_count, p_target_deaths, \
-										cur_time, measurement_scores)
+										cur_time, measurement_scores, widths, heights)
 
 
 		living_target_indices = []
@@ -714,7 +714,8 @@ class Particle:
 		for meas_source_index in range(len(measurement_lists)):
 			cur_assoc_prob = self.get_exact_prob_hidden_and_data(meas_source_index, measurement_lists[meas_source_index], \
 				living_target_indices, self.targets.living_count, measurement_associations[meas_source_index],\
-				unassociated_target_death_probs, measurement_scores[meas_source_index], SCORE_INTERVALS[meas_source_index])
+				unassociated_target_death_probs, measurement_scores[meas_source_index], SCORE_INTERVALS[meas_source_index],\
+				widths, heights)
 			exact_probability *= cur_assoc_prob
 
 		exact_death_prob = self.calc_death_prior(living_target_indices, p_target_deaths)
@@ -731,8 +732,56 @@ class Particle:
 		return (measurement_associations, targets_to_kill, imprt_re_weight)
 
 
+	def boxoverlap(self,a_x1,a_x2,a_y1,a_y2,b_x1,b_x2,b_y1,b_y2,criterion="union"):
+	    """
+	        boxoverlap computes intersection over union for bbox a and b in KITTI format.
+	        If the criterion is 'union', overlap = (a inter b) / a union b).
+	        If the criterion is 'a', overlap = (a inter b) / a, where b should be a dontcare area.
+	
+	        Inputs:
+	        - a_x1,a_x2,a_y1,a_y2: bounding box corners for object a
+	        - b_x1,b_x2,b_y1,b_y2: bounding box corners for object b
+	    """
+	    x1 = max(a_x1, b_x1)
+	    y1 = max(a_y1, b_y1)
+	    x2 = min(a_x2, b_x2)
+	    y2 = min(a_y2, b_y2)
+	    
+	    w = x2-x1
+	    h = y2-y1
+	
+	    if w<=0. or h<=0.:
+	        return 0.
+	    inter = w*h
+	    aarea = (a_x2-a_x1) * (a_y2-a_y1)
+	    barea = (b_x2-b_x1) * (b_y2-b_y1)
+	    # intersection over union overlap
+	    if criterion.lower()=="union":
+	        o = inter / float(aarea+barea-inter)
+	    elif criterion.lower()=="a":
+	        o = float(inter) / float(aarea)
+	    else:
+	        raise TypeError("Unkown type for criterion")
+	    return o
+
+	def max_meas_target_overlap(self, measurement, width, height):
+		m_x1 = measurement[0] - float(width)/2.0
+		m_x2 = measurement[0] + float(width)/2.0
+		m_y1 = measurement[1] - float(height)/2.0
+		m_y2 = measurement[1] + float(height)/2.0
+		max_overlap = 0.0
+		for target in self.targets.living_targets:
+			t_x1 = target.x[0][0] - float(target.width)/2.0
+			t_x2 = target.x[0][0] + float(target.width)/2.0
+			t_y1 = target.x[2][0] - float(target.height)/2.0
+			t_y2 = target.x[2][0] + float(target.height)/2.0
+			cur_overlap = self.boxoverlap(m_x1,m_x2,m_y1,m_y2,t_x1,t_x2,t_y1,t_y2)
+			if cur_overlap > max_overlap:
+				max_overlap = cur_overlap
+		return max_overlap
+
 	def associate_measurements_proposal_distr3(self, meas_source_index, measurement_list, total_target_count, \
-		p_target_deaths, measurement_scores):
+		p_target_deaths, measurement_scores, widths, heights):
 
 		"""
 		Try sampling associations with each measurement sequentially
@@ -781,13 +830,21 @@ class Particle:
 			cur_birth_prior = 0.0
 			for i in range(birth_count+1, min(len(BIRTH_PROBABILITIES[meas_source_index][score_index]), remaining_meas_count + birth_count + 1)):
 				cur_birth_prior += BIRTH_PROBABILITIES[meas_source_index][score_index][i]*(i - birth_count)/remaining_meas_count 
-			proposal_distribution_list.append(cur_birth_prior*p_birth_likelihood)
+			proposal_distribution_list.append(cur_birth_prior*BIRTH_LIKELIHOODS[(int(clutter_birth_binned_loc(cur_meas[0])),\
+																				 int(clutter_birth_binned_loc(cur_meas[1])))])
 
 			#compute clutter association proposal probability
 			cur_clutter_prior = 0.0
 			for i in range(clutter_count+1, min(len(CLUTTER_PROBABILITIES[meas_source_index][score_index]), remaining_meas_count + clutter_count + 1)):
 				cur_clutter_prior += CLUTTER_PROBABILITIES[meas_source_index][score_index][i]*(i - clutter_count)/remaining_meas_count 
-			proposal_distribution_list.append(cur_clutter_prior*p_clutter_likelihood)
+			max_overlap = self.max_meas_target_overlap(cur_meas, widths[meas_source_index][index], heights[meas_source_index][index])
+			if max_overlap >= .5:
+				proposal_distribution_list.append(cur_clutter_prior*CLUTTER_LIKELIHOODS_OVERLAP_GT[(int(clutter_birth_binned_loc(cur_meas[0])),\
+																				 int(clutter_birth_binned_loc(cur_meas[1])))])
+			else:
+				proposal_distribution_list.append(cur_clutter_prior*CLUTTER_LIKELIHOODS_NOT_OVERLAP_GT[(int(clutter_birth_binned_loc(cur_meas[0])),\
+																				 int(clutter_birth_binned_loc(cur_meas[1])))])
+
 
 			#normalize the proposal distribution
 			proposal_distribution = np.asarray(proposal_distribution_list)
@@ -813,7 +870,7 @@ class Particle:
 		return(list_of_measurement_associations, proposal_probability)
 
 	def sample_proposal_distr3(self, measurement_lists, total_target_count, 
-							   p_target_deaths, cur_time, measurement_scores):
+							   p_target_deaths, cur_time, measurement_scores, widths, heights):
 		"""
 		Try sampling associations with each measurement sequentially
 		Input:
@@ -840,7 +897,7 @@ class Particle:
 		for meas_source_index in range(len(measurement_lists)):
 			(cur_associations, cur_proposal_prob) = self.associate_measurements_proposal_distr3\
 				(meas_source_index, measurement_lists[meas_source_index], total_target_count, \
-				 p_target_deaths, measurement_scores[meas_source_index])
+				 p_target_deaths, measurement_scores[meas_source_index], widths, heights)
 			measurement_associations.append(cur_associations)
 			proposal_probability *= cur_proposal_prob
 
@@ -1070,7 +1127,8 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		return assoc_prior
 
 	def get_exact_prob_hidden_and_data(self, meas_source_index, measurement_list, living_target_indices, total_target_count,
-									   measurement_associations, p_target_deaths, measurement_scores, score_intervals):
+									   measurement_associations, p_target_deaths, measurement_scores, score_intervals,
+									   widths, heights):
 		"""
 		REDOCUMENT, BELOW INCORRECT, not including death probability now
 		Calculate p(data, associations, #measurements, deaths) as:
@@ -1111,9 +1169,19 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 		assert(len(measurement_associations) == len(measurement_list))
 		for meas_index, meas_association in enumerate(measurement_associations):
 			if(meas_association == total_target_count): #birth
-				likelihood *= p_birth_likelihood
+				likelihood *= BIRTH_LIKELIHOODS[(int(clutter_birth_binned_loc(measurement_list[meas_index][0])),\
+												 int(clutter_birth_binned_loc(measurement_list[meas_index][1])))]
 			elif(meas_association == -1): #clutter
-				likelihood *= p_clutter_likelihood
+				max_overlap = self.max_meas_target_overlap(measurement_list[meas_index], widths[meas_source_index][meas_index], heights[meas_source_index][meas_index])
+				if max_overlap >= .5:
+					likelihood *= CLUTTER_LIKELIHOODS_OVERLAP_GT[(int(clutter_birth_binned_loc(measurement_list[meas_index][0])),\
+												 int(clutter_birth_binned_loc(measurement_list[meas_index][1])))]
+				else:
+					likelihood *= CLUTTER_LIKELIHOODS_NOT_OVERLAP_GT[(int(clutter_birth_binned_loc(measurement_list[meas_index][0])),\
+												 int(clutter_birth_binned_loc(measurement_list[meas_index][1])))]
+			
+
+
 			else:
 				assert(meas_association >= 0 and meas_association < total_target_count), (meas_association, total_target_count)
 				score_index = get_score_index(score_intervals, measurement_scores[meas_index])
@@ -1266,7 +1334,7 @@ DON"T THINK THIS BELONGS IN PARTICLE, OR PARAMETERS COULD BE CLEANED UP
 
 		(measurement_associations, dead_target_indices, imprt_re_weight) = \
 			self.sample_data_assoc_and_death_mult_meas_per_time_proposal_distr_1(measurement_lists, \
-				cur_time, measurement_scores)
+				cur_time, measurement_scores, widths, heights)
 		assert(len(measurement_associations) == len(measurement_lists))
 		assert(imprt_re_weight != 0.0), imprt_re_weight
 		self.importance_weight *= imprt_re_weight #update particle's importance weight
@@ -1918,12 +1986,12 @@ if __name__ == "__main__":
 			training_sequences = [i for i in [i for i in range(21)] if i != seq_idx]
 			#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
 			#training_sequences = [0]
-
 			#use regionlets and lsvm detections
 			if use_regionlets_and_lsvm:
 				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES,
+					CLUTTER_LIKELIHOODS_OVERLAP_GT, CLUTTER_LIKELIHOODS_NOT_OVERLAP_GT, BIRTH_LIKELIHOODS) = \
 						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
 						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
 						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
@@ -1933,7 +2001,8 @@ if __name__ == "__main__":
 			else: 
 				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES,
+					CLUTTER_LIKELIHOODS_OVERLAP_GT, CLUTTER_LIKELIHOODS_NOT_OVERLAP_GT, BIRTH_LIKELIHOODS) = \
 					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
 					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
 					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \

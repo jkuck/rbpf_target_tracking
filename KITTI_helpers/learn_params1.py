@@ -19,6 +19,11 @@ import mailpy
 #from learn_Q import default_time_step
 import pickle
 
+
+R_CLUTTER_LIKELIHOOD = 20
+R_BIRTH_LIKELIHOOD = 40
+LIKELIHOOD_BIN_SIZE = 10
+
 LEARN_Q_FROM_ALL_GT = False
 SKIP_LEARNING_Q = True
 
@@ -1206,6 +1211,9 @@ def apply_function_on_intervals_2_det(score_cutoffs_det1, score_cutoffs_det2, fu
 
     return (function_on_det1_intervals, function_on_det2_intervals)
 
+def clutter_birth_binned_loc(location_1d):
+    return (location_1d + LIKELIHOOD_BIN_SIZE)/LIKELIHOOD_BIN_SIZE
+
 class MultiDetections:
     def __init__(self, gt_objects, det_objects1, det_objects2, training_sequences):
         self.gt_objects = gt_objects
@@ -1263,6 +1271,219 @@ class MultiDetections:
                                     self.gt_objects[seq_idx][frame_idx][gt_idx].associated_detection = [cur_det]
 
                         assert(match_found == True)
+
+    def get_birth_likelihoods(self):
+
+        def get_birth_likelihood(x, y, r, all_birth_locations):
+            """
+            Find likelihood of a birth within a radius or r from (x,y) given 
+            all_birth_locations (list of (x,y) birth coords)
+            """
+            birth_count = 0 #number of births within a radius of r from (x,y)
+            r_squared = r**2
+            for cur_birth_loc in all_birth_locations:
+                cur_birth_x = cur_birth_loc[0]
+                cur_birth_y = cur_birth_loc[1]
+                if ((x - cur_birth_x)**2 + (y - cur_birth_y)**2) < r_squared:
+                    birth_count += 1
+            return float(birth_count)/float(len(all_birth_locations)) / (math.pi * (R_BIRTH_LIKELIHOOD/LIKELIHOOD_BIN_SIZE)**2)
+
+
+        def get_all_birth_locations():
+            """
+            Get birth locations
+            """
+            birth_locations = []
+
+            det_obj_ids = {}
+            gt_ids = {}
+            for seq_idx in range(len(self.gt_objects)):
+                previously_detected_gt_ids = []
+                for frame_idx in range(len(self.det_objects1[seq_idx])):
+
+                    if frame_idx > 0:
+                        this_frame_gt_ids = []
+                        for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                            this_frame_gt_ids.append(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id)
+#                        for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx-1])):
+#                            cur_gt_id = self.gt_objects[seq_idx][frame_idx-1][gt_idx].track_id
+#                            #removed detected gt objects that have died from previously_detected_gt_ids
+#                            #to allow for rebirth
+#                            if not(cur_gt_id in this_frame_gt_ids) and cur_gt_id in previously_detected_gt_ids:
+#                                previously_detected_gt_ids.remove(cur_gt_id)
+#                                assert(not cur_gt_id in previously_detected_gt_ids)
+                        for prv_det_gt_id in previously_detected_gt_ids:
+                            if not prv_det_gt_id in this_frame_gt_ids:
+                                previously_detected_gt_ids.remove(prv_det_gt_id)
+                        for det_idx in range(len(self.det_objects1[seq_idx][frame_idx-1])):
+                            if (not self.det_objects1[seq_idx][frame_idx-1][det_idx].assoc in previously_detected_gt_ids):
+                                previously_detected_gt_ids.append(self.det_objects1[seq_idx][frame_idx-1][det_idx].assoc)
+
+                    for gt_idx in range(len(self.gt_objects[seq_idx][frame_idx])):
+                        gt_ids[(self.gt_objects[seq_idx][frame_idx][gt_idx].track_id, seq_idx)] = True
+
+
+                    for det_object in self.det_objects1[seq_idx][frame_idx]:
+                        if(det_object.assoc != -1 and \
+                           not det_object.assoc in previously_detected_gt_ids):
+                            birth_locations.append((clutter_birth_binned_loc(det_object.x), clutter_birth_binned_loc(det_object.y)))
+                            det_obj_ids[(det_object.assoc, seq_idx)] = True
+
+#            print "%d total births" % len(birth_locations)
+#            print "%d total detected gt ids" % len(det_obj_ids)
+#            print "%d total gt objects" % len(gt_ids)
+            return birth_locations
+
+        def calc_all_birth_likelihoods(r, gt_objects):
+            """
+            Inputs:
+            - r: the likelihood of a birth at (x, y) is:
+                (number of births within a distance r from (x,y))/(total number of births)
+            """
+            all_birth_likelihoods = {}
+            all_birth_locations = get_all_birth_locations()
+            for x in range(clutter_birth_binned_loc(1250)):
+                for y in range(clutter_birth_binned_loc(380)):
+                    cur_birth_likelihood = get_birth_likelihood(x, y, r, all_birth_locations)
+                    all_birth_likelihoods[(x, y)] = cur_birth_likelihood
+            return all_birth_likelihoods
+
+        birth_likelihoods = calc_all_birth_likelihoods(R_BIRTH_LIKELIHOOD/LIKELIHOOD_BIN_SIZE, self.gt_objects)
+
+        likelihood_sum = 0.0
+        for key, likelihood in birth_likelihoods.iteritems():
+            likelihood_sum += likelihood
+        print "sum of birth likelihoods = %f" % likelihood_sum
+
+        return birth_likelihoods
+
+    def get_clutter_likelihoods(self):
+
+
+        def get_clutter_likelihood(x, y, r, clutter_locations, all_valid_meas_locations, total_clutter_count,\
+                                   overlap_gt):
+            """
+            Find likelihood of a clutter measurement within a radius or r from (x,y) given 
+            clutter_locations (list of (x,y) clutter coordinates) and all_valid_meas_locations
+            (list of (x,y) valid measurement coordinates).  If there are no clutter or valid measurements
+            within a radius r of (x,y), likelihood is set to 1 (NOT PRINCIPLED!!)
+
+            Inputs:
+            - clutter_locations: list of clutter locations that all do or do not overlap a ground truth object
+            - overlap_gt: bool, getting the likelihood for clutter overlapping a ground object or not?
+            """
+            clutter_count = 0 #number of births within a radius of r from (x,y)
+            r_squared = r**2
+            for cur_clutter_loc in clutter_locations:
+                cur_clutter_x = cur_clutter_loc[0]
+                cur_clutter_y = cur_clutter_loc[1]
+                within_r = ((x - cur_clutter_x)**2 + (y - cur_clutter_y)**2) < r_squared
+                if within_r:
+                    clutter_count += 1
+            if clutter_count > 0:
+                return float(clutter_count)/float(total_clutter_count) / (math.pi * (R_CLUTTER_LIKELIHOOD/LIKELIHOOD_BIN_SIZE)**2)
+            else:
+                valid_meas_location = False
+                for cur_meas_loc in all_valid_meas_locations:
+                    cur_meas_x = cur_meas_loc[0]
+                    cur_meas_y = cur_meas_loc[1]
+                    if ((x - cur_meas_x)**2 + (y - cur_meas_y)**2) < r_squared:
+                        valid_meas_location = True
+                        break
+                if valid_meas_location or overlap_gt:
+                    return 0.000000001
+                else:
+                    return 1.0
+
+        def boxoverlap(a,b,criterion="union"):
+            """
+                boxoverlap computes intersection over union for bbox a and b in KITTI format.
+                If the criterion is 'union', overlap = (a inter b) / a union b).
+                If the criterion is 'a', overlap = (a inter b) / a, where b should be a dontcare area.
+            """
+            x1 = max(a.x1, b.x1)
+            y1 = max(a.y1, b.y1)
+            x2 = min(a.x2, b.x2)
+            y2 = min(a.y2, b.y2)
+            
+            w = x2-x1
+            h = y2-y1
+
+            if w<=0. or h<=0.:
+                return 0.
+            inter = w*h
+            aarea = (a.x2-a.x1) * (a.y2-a.y1)
+            barea = (b.x2-b.x1) * (b.y2-b.y1)
+            # intersection over union overlap
+            if criterion.lower()=="union":
+                o = inter / float(aarea+barea-inter)
+            elif criterion.lower()=="a":
+                o = float(inter) / float(aarea)
+            else:
+                raise TypeError("Unkown type for criterion")
+            return o
+
+        def get_clutter_and_valid_meas_locations(det_objects):
+            """
+            """
+            clutter_locations_overlapping_gt = []
+            clutter_locations_notOverlapping_gt = []
+            valid_meas_locations = []
+            for seq_idx, seq_detections in enumerate(det_objects):
+                for frame_idx, frame_detections in enumerate(seq_detections):
+                    for det_object in frame_detections:
+                        if(det_object.assoc == -1):
+                            max_gt_overlap = 0.0
+                            for gt_object in self.gt_objects[seq_idx][frame_idx]:
+                                cur_gt_overlap = boxoverlap(det_object, gt_object)
+                                if cur_gt_overlap > max_gt_overlap:
+                                    max_gt_overlap = cur_gt_overlap
+                            if max_gt_overlap >= .5:
+                                clutter_locations_overlapping_gt.append((clutter_birth_binned_loc(det_object.x), clutter_birth_binned_loc(det_object.y)))
+                            else:
+                                clutter_locations_notOverlapping_gt.append((clutter_birth_binned_loc(det_object.x), clutter_birth_binned_loc(det_object.y)))                                
+                        else:
+                            valid_meas_locations.append((clutter_birth_binned_loc(det_object.x), clutter_birth_binned_loc(det_object.y)))
+
+            return (clutter_locations_overlapping_gt, clutter_locations_notOverlapping_gt, valid_meas_locations)
+
+
+
+        def calc_all_clutter_likelihoods(r, det_objects):
+            """
+            Inputs:
+            - r: the likelihood of a clutter measurement at (x, y) is:
+                (number of clutter measurements within a distance r from (x,y))/(total number of clutter measurements)
+            """
+            all_clutter_likelihoods_overlappingGT = {}
+            all_clutter_likelihoods_notOverlappingGT = {}
+            (all_clutter_locations_overlapping_gt, all_clutter_locations_notOverlapping_gt, \
+                all_valid_meas_locations) = get_clutter_and_valid_meas_locations(det_objects)
+            total_clutter_count = len(all_clutter_locations_overlapping_gt) + len(all_clutter_locations_notOverlapping_gt)
+            for x in range(clutter_birth_binned_loc(1250)):
+                for y in range(clutter_birth_binned_loc(380)):
+                    cur_clutter_likelihood_overlappingGT = get_clutter_likelihood(x, y, r, all_clutter_locations_overlapping_gt,\
+                                                                              all_valid_meas_locations, total_clutter_count, True)
+                    cur_clutter_likelihood_notOverlappingGT = get_clutter_likelihood(x, y, r, all_clutter_locations_notOverlapping_gt,\
+                                                                              all_valid_meas_locations, total_clutter_count, False)
+                    all_clutter_likelihoods_overlappingGT[(x, y)] = cur_clutter_likelihood_overlappingGT
+                    all_clutter_likelihoods_notOverlappingGT[(x, y)] = cur_clutter_likelihood_notOverlappingGT
+                print "x = %d done" % x
+            return (all_clutter_likelihoods_overlappingGT, all_clutter_likelihoods_notOverlappingGT)
+
+        (clutter_likelihoods_overlapGT, clutter_likelihoods_notOverlapGT) = calc_all_clutter_likelihoods(R_CLUTTER_LIKELIHOOD/LIKELIHOOD_BIN_SIZE, self.det_objects1)
+
+        likelihood_sum = 0.0
+        for key, likelihood in clutter_likelihoods_overlapGT.iteritems():
+            likelihood_sum += likelihood
+        for key, likelihood in clutter_likelihoods_notOverlapGT.iteritems():
+            likelihood_sum += likelihood
+        print "sum of clutter likelihoods = %f" % likelihood_sum
+
+        return (clutter_likelihoods_overlapGT, clutter_likelihoods_notOverlapGT)
+
+
+
 
     def get_birth_probabilities_score_range(self, min_score_det_1, max_score_det_1, min_score_det_2, max_score_det_2,\
                                             allow_target_rebirth = True):
@@ -2138,6 +2359,9 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     multi_detections = MultiDetections(gt_objects, regionlets_det_objects, lsvm_det_objects, training_sequences)
     print "HELLO#7"
 
+    (clutter_likelihoods_overlapGT, clutter_likelihoods_notOverlapGT) = multi_detections.get_clutter_likelihoods()
+    birth_likelihoods = multi_detections.get_birth_likelihoods()
+
     (birth_probabilities_regionlets, birth_probabilities_lsvm) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
         lsvm_score_intervals, multi_detections.get_birth_probabilities_score_range)
 
@@ -2152,7 +2376,9 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
     (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
 
 
-    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, \
+        death_probs_near_border, death_probs_not_near_border,
+        clutter_likelihoods_overlapGT, clutter_likelihoods_notOverlapGT, birth_likelihoods)
 
 def get_meas_target_sets_regionlets_general_format(training_sequences, regionlets_score_intervals, \
     obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
@@ -2195,6 +2421,10 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     multi_detections = MultiDetections(gt_objects, regionlets_det_objects, regionlets_det_objects, training_sequences)
     print "HELLO#7"
 
+    (clutter_likelihoods_overlapGT, clutter_likelihoods_notOverlapGT) = multi_detections.get_clutter_likelihoods()
+    birth_likelihoods = multi_detections.get_birth_likelihoods()
+
+
     (birth_probabilities_regionlets, birth_probabilities_lsvm_nonsense) = apply_function_on_intervals_2_det(regionlets_score_intervals, \
         regionlets_score_intervals, multi_detections.get_birth_probabilities_score_range)
 
@@ -2209,7 +2439,9 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
     birth_probabilities = [birth_probabilities_regionlets]
     print "HELLO#8"
 
-    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, \
+        meas_noise_covs, death_probs_near_border, death_probs_not_near_border, \
+        clutter_likelihoods_overlapGT, clutter_likelihoods_notOverlapGT, birth_likelihoods)
 
 
 
