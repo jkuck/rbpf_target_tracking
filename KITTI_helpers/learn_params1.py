@@ -1358,8 +1358,6 @@ class MultiDetections:
         return birth_likelihoods
 
     def get_clutter_likelihoods(self):
-
-
         def get_clutter_likelihood(x, y, r, clutter_locations, all_valid_meas_locations, total_clutter_count,\
                                    overlap_gt):
             """

@@ -33,8 +33,8 @@ from jdk_helper_evaluate_results import eval_results
 #from proposal2_helper import memoized_birth_clutter_prior
 #from proposal2_helper import sample_birth_clutter_counts
 #from proposal2_helper import sample_target_deaths_proposal2
-#random.seed(5)
-#np.random.seed(seed=5)
+random.seed(5)
+np.random.seed(seed=5)
 
 import cProfile
 import time
@@ -44,6 +44,9 @@ from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
 from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
 from run_experiment_batch_sherlock import get_description_of_run
 
+#create a big pedestrian bouding box to signify the max weight particle changed
+#print the frames since last association for each target
+PRINT_BB_INFO = True
 
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
@@ -249,6 +252,7 @@ class Target:
 		self.birth_time = cur_time
 		#Time of the last measurement data association with this target
 		self.last_measurement_association = cur_time
+		self.frames_since_last_assoc = 0
 		self.id_ = id_ #named id_ to avoid clash with built in id
 		self.death_prob = -1 #calculate at every time instance
 
@@ -303,6 +307,9 @@ class Target:
 
 		self.all_states[-1] = (self.x, self.width, self.height)
 		self.updated_this_time_instance = True
+		self.frames_since_last_assoc = 0
+		self.last_measurement_association = cur_time
+
 
 	def kf_predict(self, dt, cur_time):
 		"""
@@ -330,6 +337,7 @@ class Target:
 
 		assert(self.x.shape == (4, 1))
 		self.updated_this_time_instance = False
+		self.frames_since_last_assoc += 1
 
 
 
@@ -389,6 +397,7 @@ class Target:
 			cur_death_prob = 1.0
 		else:
 			frames_since_last_assoc = int(round((cur_time - self.last_measurement_association)/default_time_step))
+			assert(self.frames_since_last_assoc == frames_since_last_assoc), (self.frames_since_last_assoc, frames_since_last_assoc)
 			assert(abs(float(frames_since_last_assoc) - (cur_time - self.last_measurement_association)/default_time_step) < .00000001)
 			if(self.near_border()):
 				if frames_since_last_assoc < len(BORDER_DEATH_PROBABILITIES):
@@ -457,8 +466,8 @@ class TargetSet:
 		self.total_count += 1
 		if not USE_CREATE_CHILD:
 			assert(len(self.living_targets) == self.living_count and len(self.all_targets) == self.total_count)
-
-
+		else:
+			assert(len(self.living_targets) == self.living_count)
 	def kill_target(self, living_target_index):
 		"""
 		Kill target self.living_targets[living_target_index], note that living_target_index
@@ -524,25 +533,49 @@ class TargetSet:
 		return every_target
 
 
-	def write_online_results(self, online_results_filename, frame_idx):
+	def write_online_results(self, online_results_filename, frame_idx, max_weight_particle_changed, cur_time, part_id):
+		for target in self.living_targets:
+			print "particle %d: target %d claims to have been born at %f and alive at:" % (part_id, target.id_, target.birth_time)
+			print target.all_time_stamps
+			print target.all_states
+			print target.last_measurement_association
+			print target.frames_since_last_assoc
+			print target.updated_this_time_instance
+
+
+
 		if frame_idx == 0:
 			f = open(online_results_filename, "w") #write over old results if first frame
 		else:
 			f = open(online_results_filename, "a") #write at end of file
 
+		#draw a big pedestrian bounding box to see when the max weight particle changed when viewing results
+		if max_weight_particle_changed and PRINT_BB_INFO:
+			f.write( "%d %d Pedestrian -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+				(frame_idx, 9999999, 5, 10, 1240, 350))
+
 		for target in self.living_targets:
-			assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
+			assert(target.all_time_stamps[-1] == frame_idx*default_time_step), (target.all_time_stamps[-1], frame_idx*default_time_step)
 			x_pos = target.all_states[-1][0][0][0]
 			y_pos = target.all_states[-1][0][2][0]
 			width = target.all_states[-1][1]
 			height = target.all_states[-1][2]
 
+			frames_since_last_assoc = int(round((cur_time - target.last_measurement_association)/default_time_step))
+			assert(target.frames_since_last_assoc == frames_since_last_assoc), (target.frames_since_last_assoc, frames_since_last_assoc)
 			left = x_pos - width/2.0
 			top = y_pos - height/2.0
 			right = x_pos + width/2.0
-			bottom = y_pos + height/2.0		 
-			f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-				(frame_idx, target.id_, left, top, right, bottom))
+			bottom = y_pos + height/2.0	
+			if PRINT_BB_INFO:	 
+				f.write( "%d %d %s -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+					(frame_idx, target.id_, "car%d-%f" % (frames_since_last_assoc, target.birth_time), left, top, right, bottom))
+				if frames_since_last_assoc == 1:
+					print target.all_time_stamps
+#					assert((cur_time - default_time_step) in target.all_time_stamps), (cur_time, (cur_time - default_time_step), target.all_time_stamps)
+			else:
+				f.write( "%d %d car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+					(frame_idx, target.id_,left, top, right, bottom))
 
 
 	def write_targets_to_KITTI_format(self, num_frames, filename):
@@ -608,7 +641,7 @@ class Particle:
 		#cache for memoizing association likelihood computation
 		self.assoc_likelihood_cache = {}
 
-		self.id_ = id_ #will be the same as the parent's id when copying in create_child
+		self.id_ = id_
 
 		self.parent_id = -1
 
@@ -620,7 +653,9 @@ class Particle:
 		self.pi_targets_debug = []
 
 	def create_child(self):
-		child_particle = Particle(self.id_)
+		global NEXT_PARTICLE_ID
+		child_particle = Particle(NEXT_PARTICLE_ID)
+		NEXT_PARTICLE_ID += 1
 		child_particle.importance_weight = self.importance_weight
 		child_particle.targets = self.targets.create_child()
 		return child_particle
@@ -1476,8 +1511,10 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 	- number_resamplings: the number of times resampling was performed
 	"""
 	particle_set = []
+	global NEXT_PARTICLE_ID
 	for i in range(0, N_PARTICLES):
-		particle_set.append(Particle(i))
+		particle_set.append(Particle(NEXT_PARTICLE_ID))
+		NEXT_PARTICLE_ID += 1
 
 	prev_time_stamp = -1
 
@@ -1486,7 +1523,7 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 	time_stamps = []
 	positions = []
 
-	iter = 1 # for plotting only occasionally
+	iter = 0 # for plotting only occasionally
 	number_resamplings = 0
 
 	#sanity check
@@ -1502,8 +1539,13 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 		time_stamp = target_sets[0].measurements[time_instance_index].time
 		for target_set in target_sets:
 			assert(target_set.measurements[time_instance_index].time == time_stamp)
-#		measurements = measurement_set.val
+		print
+		print
+		print '-'*80
+		print "time_stamp = ", time_stamp, "living target count in first particle = ",\
+		particle_set[0].targets.living_count
 
+#		measurements = measurement_set.val
 		measurement_lists = []
 		widths = []
 		heights = []
@@ -1514,8 +1556,7 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 			heights.append(target_set.measurements[time_instance_index].heights)
 			measurement_scores.append(target_set.measurements[time_instance_index].scores)
 
-		print "time_stamp = ", time_stamp, "living target count in first particle = ",\
-		particle_set[0].targets.living_count
+
 		for particle in particle_set:
 			#update particle death probabilities
 			if(prev_time_stamp != -1):
@@ -1524,6 +1565,7 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 				for target in particle.targets.living_targets:
 					dt = time_stamp - prev_time_stamp
 					assert(abs(dt - default_time_step) < .00000001), (dt, default_time_step)
+					print "about to run kf_predict for target %d in particle %d" % (target.id_, particle.id_)
 					target.kf_predict(dt, time_stamp)
 				#update particle death probabilities AFTER kf_predict so that targets that moved
 				#off screen this time instance will be killed
@@ -1564,26 +1606,28 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 			for particle in particle_set:
 				if(particle.importance_weight > max_imprt_weight):
 					max_imprt_weight = particle.importance_weight
-			cur_max_weight_target_set = None
-			cur_max_weight_particle = None
-			for particle in particle_set:
-				if(particle.importance_weight == max_imprt_weight):
-					cur_max_weight_target_set = particle.targets		
-					cur_max_weight_particle = particle
+			if prv_max_weight_particle == None or \
+			   prv_max_weight_particle.importance_weight < .999*max_imprt_weight or \
+			   not prv_max_weight_particle in particle_set:
+				for particle in particle_set:
+					if(particle.importance_weight == max_imprt_weight):
+						cur_max_weight_particle = particle
 
 			if prv_max_weight_particle != None and prv_max_weight_particle != cur_max_weight_particle:
-				target_associations = match_target_ids(cur_max_weight_target_set.living_targets,\
+				target_associations = match_target_ids(cur_max_weight_particle.targets.living_targets,\
 													   prv_max_weight_particle.targets.living_targets)
 				#replace associated target IDs with the IDs from the previous maximum importance weight
 				#particle for ID conistency in the online results we output
-				for cur_target in cur_max_weight_target_set.living_targets:
+				for cur_target in cur_max_weight_particle.targets.living_targets:
 					if cur_target.id_ in target_associations:
 						cur_target.id_ = target_associations[cur_target.id_]
+
+			max_weight_particle_changed = (cur_max_weight_particle != prv_max_weight_particle)
 
 			prv_max_weight_particle = cur_max_weight_particle
 
 			#write current time step's results to results file
-			cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index)
+			cur_max_weight_particle.targets.write_online_results(online_results_filename, time_instance_index, max_weight_particle_changed, time_stamp, cur_max_weight_particle.id_)
 
 		iter+=1
 
@@ -1795,11 +1839,15 @@ def match_target_ids(particle1_targets, particle2_targets):
 		if c < max_cost:
 			associations[particle1_targets[row].id_] = particle2_targets[col].id_
 
+	print "cost_matrix:"
+	print cost_matrix
+
 	return associations
 
 
 if __name__ == "__main__":
 	
+	NEXT_PARTICLE_ID = 0
 	if RUN_ONLINE:
 		NEXT_TARGET_ID = 0 #all targets have unique IDs, even if they are in different particles
 	
