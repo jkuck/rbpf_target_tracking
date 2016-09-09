@@ -1841,6 +1841,12 @@ def match_target_ids(particle1_targets, particle2_targets):
 
 	print "cost_matrix:"
 	print cost_matrix
+	for row,col in association_matrix:
+		print "cost for row =", row, " column =", col, ": ", cost_matrix[row][col], " (max cost = ", max_cost, ")"
+		print "particle1_targets[row].id_ = ", particle1_targets[row].id_
+		print "particle2_targets[col].id_ = ", particle2_targets[col].id_
+	print "associations:"
+	print associations
 
 	return associations
 
