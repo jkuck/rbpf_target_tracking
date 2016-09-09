@@ -1436,6 +1436,12 @@ class MultiDetections:
                                 cur_gt_overlap = boxoverlap(det_object, gt_object)
                                 if cur_gt_overlap > max_gt_overlap:
                                     max_gt_overlap = cur_gt_overlap
+                            if frame_idx != 0:
+                                for prv_det in det_objects[seq_idx][frame_idx-1]:
+                                    cur_prv_det_overlap = boxoverlap(det_object, prv_det)
+                                    #this is really overlap with a previous detection, not gt, but doing quick test
+                                    if cur_prv_det_overlap > max_gt_overlap:
+                                        max_gt_overlap = cur_prv_det_overlap
                             if max_gt_overlap >= .5:
                                 clutter_locations_overlapping_gt.append((clutter_birth_binned_loc(det_object.x), clutter_birth_binned_loc(det_object.y)))
                             else:

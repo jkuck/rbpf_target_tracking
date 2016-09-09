@@ -813,6 +813,21 @@ class Particle:
 			cur_overlap = self.boxoverlap(m_x1,m_x2,m_y1,m_y2,t_x1,t_x2,t_y1,t_y2)
 			if cur_overlap > max_overlap:
 				max_overlap = cur_overlap
+
+		global PRV_MEASUREMENTS_HACK
+		global PRV_WIDTHS_HACK
+		global PRV_HEIGHTS_HACK
+		assert(len(PRV_MEASUREMENTS_HACK) == len(PRV_WIDTHS_HACK)), (len(PRV_MEASUREMENTS_HACK), len(PRV_WIDTHS_HACK), PRV_MEASUREMENTS_HACK, PRV_WIDTHS_HACK)
+		if PRV_MEASUREMENTS_HACK != None:
+			for idx, prv_meas in PRV_MEASUREMENTS_HACK:
+				prv_m_x1 = prv_meas[0] - float(PRV_WIDTHS_HACK[idx])/2.0
+				prv_m_x2 = prv_meas[0] + float(PRV_WIDTHS_HACK[idx])/2.0
+				prv_m_y1 = prv_meas[1] - float(PRV_HEIGHTS_HACK[idx])/2.0
+				prv_m_y2 = prv_meas[1] + float(PRV_HEIGHTS_HACK[idx])/2.0
+				cur_overlap = self.boxoverlap(m_x1,m_x2,m_y1,m_y2,prv_m_x1,prv_m_x2,prv_m_y1,prv_m_y2)
+				if cur_overlap > max_overlap:
+					max_overlap = cur_overlap
+
 		return max_overlap
 
 	def associate_measurements_proposal_distr3(self, meas_source_index, measurement_list, total_target_count, \
@@ -1510,6 +1525,15 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 		importance weight particle after processing all measurements
 	- number_resamplings: the number of times resampling was performed
 	"""
+
+	#This is hacky for a quick test, should clean up sometime if it works
+	global PRV_MEASUREMENTS_HACK
+	global PRV_WIDTHS_HACK
+	global PRV_HEIGHTS_HACK
+	PRV_MEASUREMENTS_HACK = None
+	PRV_WIDTHS_HACK = None
+	PRV_HEIGHTS_HACK = None
+
 	particle_set = []
 	global NEXT_PARTICLE_ID
 	for i in range(0, N_PARTICLES):
@@ -1575,6 +1599,12 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 		for particle in particle_set:
 			new_target = particle.update_particle_with_measurement(time_stamp, measurement_lists, widths, heights, measurement_scores)
 			new_target_list.append(new_target)
+
+		assert(len(measurement_lists) == 1), (len(measurement_lists), measurement_lists)
+		PRV_MEASUREMENTS_HACK = measurement_lists[0]
+		PRV_WIDTHS_HACK = widths[0]
+		PRV_HEIGHTS_HACK = heights[0]
+
 		normalize_importance_weights(particle_set)
 		#debugging
 		if DEBUG:
