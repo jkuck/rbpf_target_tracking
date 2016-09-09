@@ -40,10 +40,10 @@ from jdk_helper_evaluate_results import get_MOTA
 import cProfile
 import time
 import os
-from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
-#from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
-#from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
-from run_experiment_batch_sherlock import get_description_of_run
+from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
+#from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
+#from run_experiment_batch import SEQUENCES_TO_PROCESS
+from run_experiment_batch import get_description_of_run
 
 
 USE_CREATE_CHILD = True #speed up copying during resampling
@@ -169,8 +169,8 @@ P_default = np.array([[40.64558317, 0, 			 0, 0],
 #from learn_params1, not counting 'ignored' ground truth
 #R_default = np.array([[ 40.64558317,   0.14036472],
 # 					  [  0.14036472,   5.56278505]])
-R_default = np.array([[ 0.0,   0.0],
- 					  [ 0.0,   0.0]])
+#R_default = np.array([[ 0.0,   0.0],
+# 					  [ 0.0,   0.0]])
 
 
 #learned from all GT
@@ -198,7 +198,7 @@ beta_death = 1.0
 theta_death = 1.0/beta_death
 
 #print Q_default
-print R_default
+#print R_default
 
 #for only displaying targets older than this
 min_target_age = .2
@@ -1790,7 +1790,9 @@ def process_1_sequence(seq_idx, results_folder, run_idx, sort_dets_on_intervals,
 
 
 def main_fun(Q):
-	seq_idx = 0
+	seq_idx = 2
+	CUR_EXPERIMENT_BATCH_NAME = "gradient_descent_Q_seq%d" % seq_idx
+
 	SEQUENCES_TO_PROCESS = [seq_idx]
 	global Q_default
 	Q_default = np.array([[ Q[0],  Q[1],  Q[2],   Q[3]],
@@ -1799,6 +1801,18 @@ def main_fun(Q):
 	 					  [ Q[12], Q[13], Q[14],  Q[15]]])
 	print "Q this iteration (for sequence %d):" % seq_idx
 	print Q_default
+#	Q_default = np.array([[  60.33442497,  102.95992102,   -5.50458177,   -0.22813535],
+#	 					  [ 102.95992102,  179.84877761,  -13.37640528,   -9.70601621],
+#	 					  [  -5.50458177,  -13.37640528,    4.56034398,    9.48945108],
+#	 					  [  -0.22813535,   -9.70601621,    9.48945108,   22.32984314]])
+
+	global R_default
+#	R_default = np.array([[ Q[0],   Q[1]],
+# 					  	  [ Q[2],   Q[3]]])
+	R_default = np.array([[ 0.0,   0.0],
+ 					  	  [ 0.0,   0.0]])
+	print "R this iteration (for sequence %d):" % seq_idx
+	print R_default
 
 	if RUN_ONLINE:
 		global NEXT_TARGET_ID
@@ -1821,7 +1835,6 @@ def main_fun(Q):
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
 #	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup3/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
-	CUR_EXPERIMENT_BATCH_NAME = "gradient_descent_Q_seq%d" % seq_idx
 	results_folder = '%s/%s/%s' % (DIRECTORY_OF_ALL_RESULTS, CUR_EXPERIMENT_BATCH_NAME, results_folder_name)
 
 	filename_mapping = "./KITTI_helpers/data/evaluate_tracking.seqmap"
@@ -1873,10 +1886,19 @@ if __name__ == "__main__":
 #	 					  [ -4.01491901,  -3.56066467,   4.59923143,   5.19622064],
 #	 					  [ -8.5737873 ,  -8.07744876,   5.19622064,   6.10733628]])
 
+
 	print "initial Q:"
 	print Q_default
 	fun_min = minimize(main_fun, Q_default)
 	print "minimum found:"
 	print fun_min
 
-
+#	R_default = np.array([[ 0.0,   0.0],
+# 					  	  [ 0.0,   0.0]])
+#
+#	print "initial R:"
+#	print R_default
+#	fun_min = minimize(main_fun, R_default)
+#	print "minimum found:"
+#	print fun_min
+#
