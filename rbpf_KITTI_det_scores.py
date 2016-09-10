@@ -82,7 +82,7 @@ USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check U
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
@@ -171,8 +171,8 @@ P_default = np.array([[40.64558317, 0, 			 0, 0],
 #from learn_params1, not counting 'ignored' ground truth
 #R_default = np.array([[ 40.64558317,   0.14036472],
 # 					  [  0.14036472,   5.56278505]])
-R_default = np.array([[ 0.0,   0.0],
- 					  [ 0.0,   0.0]])
+R_default = np.array([[ 0.1,   0.0],
+ 					  [ 0.0,   0.1]])
 
 
 #learned from all GT
@@ -261,7 +261,7 @@ class Target:
 		#if target's predicted location is offscreen, set to True and then kill
 		self.offscreen = False
 
-		self.updated_this_time_instance = False
+		self.updated_this_time_instance = True
 
 	def near_border(self):
 		near_border = False
@@ -303,6 +303,7 @@ class Target:
 
 		self.all_states[-1] = (self.x, self.width, self.height)
 		self.updated_this_time_instance = True
+		self.last_measurement_association = cur_time
 
 	def kf_predict(self, dt, cur_time):
 		"""
