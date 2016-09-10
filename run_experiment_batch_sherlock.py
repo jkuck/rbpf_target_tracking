@@ -8,9 +8,9 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
-DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck//allSequences/Online/9-10-tests'
+DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/9-10-tests'
 
-CUR_EXPERIMENT_BATCH_NAME = 'Rnear0_4xQ_max1MeasUpdate_debuggedUpdateLastAssoc'
+CUR_EXPERIMENT_BATCH_NAME = 'Rnear0_4xQ_max1MeasUpdate_debuggedUpdateLastAssoc_DeathsOrd1MarkovChain'
 RUN_EVALUATION = True
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
