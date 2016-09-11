@@ -46,6 +46,8 @@ from run_experiment_batch_sherlock import get_description_of_run
 
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
+#near online mode wait this many frames before picking max weight particle 
+ONLINE_DELAY = 3 
 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
@@ -525,25 +527,60 @@ class TargetSet:
 		return every_target
 
 
-	def write_online_results(self, online_results_filename, frame_idx):
-		if frame_idx == 0:
+	def write_online_results(self, online_results_filename, frame_idx, total_frame_count):
+		if frame_idx == ONLINE_DELAY:
 			f = open(online_results_filename, "w") #write over old results if first frame
 		else:
 			f = open(online_results_filename, "a") #write at end of file
 
-		for target in self.living_targets:
-			assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
-			x_pos = target.all_states[-1][0][0][0]
-			y_pos = target.all_states[-1][0][2][0]
-			width = target.all_states[-1][1]
-			height = target.all_states[-1][2]
+		if ONLINE_DELAY == 0:
+			for target in self.living_targets:
+				assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
+				x_pos = target.all_states[-1][0][0][0]
+				y_pos = target.all_states[-1][0][2][0]
+				width = target.all_states[-1][1]
+				height = target.all_states[-1][2]
 
-			left = x_pos - width/2.0
-			top = y_pos - height/2.0
-			right = x_pos + width/2.0
-			bottom = y_pos + height/2.0		 
-			f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-				(frame_idx, target.id_, left, top, right, bottom))
+				left = x_pos - width/2.0
+				top = y_pos - height/2.0
+				right = x_pos + width/2.0
+				bottom = y_pos + height/2.0		 
+				f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+					(frame_idx, target.id_, left, top, right, bottom))
+
+		else:
+			every_target = self.collect_ancestral_targets()
+			timestamp = (frame_idx - ONLINE_DELAY)*default_time_step
+			for target in every_target:
+				if timestamp in target.all_time_stamps:
+					x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
+					y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
+					width = target.all_states[target.all_time_stamps.index(timestamp)][1]
+					height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+
+					left = x_pos - width/2.0
+					top = y_pos - height/2.0
+					right = x_pos + width/2.0
+					bottom = y_pos + height/2.0		 
+					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+						(frame_idx, target.id_, left, top, right, bottom))
+
+			if frame_idx == total_frame_count - 1:
+				for cur_frame_idx in range(frame_idx - ONLINE_DELAY + 1, total_frame_count):
+					timestamp = (cur_frame_idx)*default_time_step
+					for target in every_target:
+						if timestamp in target.all_time_stamps:
+							x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
+							y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
+							width = target.all_states[target.all_time_stamps.index(timestamp)][1]
+							height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+
+							left = x_pos - width/2.0
+							top = y_pos - height/2.0
+							right = x_pos + width/2.0
+							bottom = y_pos + height/2.0		 
+							f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+								(cur_frame_idx, target.id_, left, top, right, bottom))
 
 
 	def write_targets_to_KITTI_format(self, num_frames, filename):
@@ -1516,7 +1553,8 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 			prv_max_weight_particle = cur_max_weight_particle
 
 			#write current time step's results to results file
-			cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index)
+			if time_instance_index >= ONLINE_DELAY:
+				cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index, number_time_instances)
 
 		iter+=1
 

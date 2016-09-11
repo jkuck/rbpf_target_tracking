@@ -1616,7 +1616,7 @@ class MultiDetections:
         living_counts = []
         print '#'*80
         print "get_death_probs info: "
-        for i in range(1):
+        for i in range(3):
             death_count = float(self.get_death_count(i, near_border))
             living_count = float(self.get_living_count(i, near_border))
             death_count1 = float(self.get_death_count1(i, near_border))
