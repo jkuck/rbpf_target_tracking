@@ -563,7 +563,7 @@ class TargetSet:
 					right = x_pos + width/2.0
 					bottom = y_pos + height/2.0		 
 					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-						(frame_idx, target.id_, left, top, right, bottom))
+						(frame_idx - ONLINE_DELAY, target.id_, left, top, right, bottom))
 
 			if frame_idx == total_frame_count - 1:
 				for cur_frame_idx in range(frame_idx - ONLINE_DELAY + 1, total_frame_count):

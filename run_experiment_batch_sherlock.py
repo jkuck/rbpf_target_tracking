@@ -11,7 +11,7 @@ NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/9-10-tests'
 
 CUR_EXPERIMENT_BATCH_NAME = 'Rnear0_4xQ_max1MeasUpdate_debuggedUpdateLastAssoc_nearOnline3frameDelay'
-RUN_EVALUATION = True
+RUN_EVALUATION = False
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
 						   use_regionlets_and_lsvm, sort_dets_on_intervals):
