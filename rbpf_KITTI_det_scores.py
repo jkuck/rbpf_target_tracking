@@ -1558,29 +1558,46 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 		prev_time_stamp = time_stamp
 
 		if RUN_ONLINE:
-
-			#find the particle that currently has the largest importance weight
-			max_imprt_weight = -1
-			for particle in particle_set:
-				if(particle.importance_weight > max_imprt_weight):
-					max_imprt_weight = particle.importance_weight
-			cur_max_weight_target_set = None
-			cur_max_weight_particle = None
-			for particle in particle_set:
-				if(particle.importance_weight == max_imprt_weight):
-					cur_max_weight_target_set = particle.targets		
-					cur_max_weight_particle = particle
+			if time_instance_index >= ONLINE_DELAY:
+				#find the particle that currently has the largest importance weight
+				max_imprt_weight = -1
+				for particle in particle_set:
+					if(particle.importance_weight > max_imprt_weight):
+						max_imprt_weight = particle.importance_weight
+				cur_max_weight_target_set = None
+				cur_max_weight_particle = None
+				for particle in particle_set:
+					if(particle.importance_weight == max_imprt_weight):
+						cur_max_weight_target_set = particle.targets		
+						cur_max_weight_particle = particle
 
 			if prv_max_weight_particle != None and prv_max_weight_particle != cur_max_weight_particle:
-				target_associations = match_target_ids(cur_max_weight_target_set.living_targets,\
-													   prv_max_weight_particle.targets.living_targets)
-				#replace associated target IDs with the IDs from the previous maximum importance weight
-				#particle for ID conistency in the online results we output
-				for cur_target in cur_max_weight_target_set.living_targets:
-					if cur_target.id_ in target_associations:
-						cur_target.id_ = target_associations[cur_target.id_]
+				if ONLINE_DELAY == 0:
+					target_associations = match_target_ids(cur_max_weight_target_set.living_targets,\
+														   prv_max_weight_particle.targets.living_targets)
+					#replace associated target IDs with the IDs from the previous maximum importance weight
+					#particle for ID conistency in the online results we output
+					for cur_target in cur_max_weight_target_set.living_targets:
+						if cur_target.id_ in target_associations:
+							cur_target.id_ = target_associations[cur_target.id_]
+				elif time_instance_index >= ONLINE_DELAY:
+					#print time_instance_index
+					#print cur_max_weight_target_set.living_targets_q
+					#print prv_max_weight_particle.targets.living_targets_q
+					target_associations = match_target_ids(cur_max_weight_target_set.living_targets_q[0][1],\
+														   prv_max_weight_particle.targets.living_targets_q[0][1])
+					#replace associated target IDs with the IDs from the previous maximum importance weight
+					#particle for ID conistency in the online results we output
+					for q_idx in range(ONLINE_DELAY):
+						for cur_target in cur_max_weight_target_set.living_targets_q[q_idx][1]:
+							if cur_target.id_ in target_associations:
+								cur_target.id_ = target_associations[cur_target.id_]
+					for cur_target in cur_max_weight_target_set.living_targets:
+						if cur_target.id_ in target_associations:
+							cur_target.id_ = target_associations[cur_target.id_]
 
-			prv_max_weight_particle = cur_max_weight_particle
+			if time_instance_index >= ONLINE_DELAY:
+				prv_max_weight_particle = cur_max_weight_particle
 
 			#write current time step's results to results file
 			if time_instance_index >= ONLINE_DELAY:
