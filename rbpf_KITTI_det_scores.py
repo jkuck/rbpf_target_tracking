@@ -18,6 +18,7 @@ import sys
 import resource
 import errno
 from munkres import Munkres
+from collections import deque
 
 #sys.path.insert(0, "/Users/jkuck/rotation3/clearmetrics")
 #import clearmetrics
@@ -255,7 +256,7 @@ class Target:
 		self.death_prob = -1 #calculate at every time instance
 
 		self.all_states = [(self.x, self.width, self.height)]
-		self.all_time_stamps = [cur_time]
+		self.all_time_stamps = [round(cur_time, 1)]
 
 		self.measurements = []
 		self.measurement_time_stamps = []
@@ -300,7 +301,7 @@ class Target:
 		self.P = updated_P
 		self.width = width
 		self.height = height
-		assert(self.all_time_stamps[-1] == cur_time and self.all_time_stamps[-2] != cur_time)
+		assert(self.all_time_stamps[-1] == round(cur_time, 1) and self.all_time_stamps[-2] != round(cur_time, 1))
 		assert(self.x.shape == (4, 1)), (self.x.shape, np.dot(K, residual).shape)
 
 		self.all_states[-1] = (self.x, self.width, self.height)
@@ -314,7 +315,7 @@ class Target:
 			-dt: time step to run prediction on
 			-cur_time: the time the prediction is made for
 		"""
-		assert(self.all_time_stamps[-1] == (cur_time - dt))
+		assert(self.all_time_stamps[-1] == round((cur_time - dt), 1))
 		F = np.array([[1.0,  dt, 0.0, 0.0],
 		      		  [0.0, 1.0, 0.0, 0.0],
                       [0.0, 0.0, 1.0,  dt],
@@ -324,7 +325,7 @@ class Target:
 		self.x = x_predict
 		self.P = P_predict
 		self.all_states.append((self.x, self.width, self.height))
-		self.all_time_stamps.append(cur_time)
+		self.all_time_stamps.append(round(cur_time, 1))
 
 		if(self.x[0][0]<0 or self.x[0][0]>=CAMERA_PIXEL_WIDTH or \
 		   self.x[2][0]<0 or self.x[2][0]>=CAMERA_PIXEL_HEIGHT):
@@ -437,6 +438,8 @@ class TargetSet:
 
 		self.parent_target_set = None 
 
+		self.living_targets_q = deque([-1 for i in range(ONLINE_DELAY)])
+
 	def create_child(self):
 		child_target_set = TargetSet()
 		child_target_set.parent_target_set = self
@@ -445,6 +448,7 @@ class TargetSet:
 		child_target_set.all_targets = copy.deepcopy(self.living_targets)
 		for target in child_target_set.all_targets:
 			child_target_set.living_targets.append(target)
+		child_target_set.living_targets_q = copy.deepcopy(self.living_targets_q)
 		return child_target_set
 
 	def create_new_target(self, measurement, width, height, cur_time):
@@ -535,7 +539,7 @@ class TargetSet:
 
 		if ONLINE_DELAY == 0:
 			for target in self.living_targets:
-				assert(target.all_time_stamps[-1] == frame_idx*default_time_step)
+				assert(target.all_time_stamps[-1] == round(frame_idx*default_time_step, 1))
 				x_pos = target.all_states[-1][0][0][0]
 				y_pos = target.all_states[-1][0][2][0]
 				width = target.all_states[-1][1]
@@ -549,46 +553,70 @@ class TargetSet:
 					(frame_idx, target.id_, left, top, right, bottom))
 
 		else:
-			every_target = self.collect_ancestral_targets()
-			timestamp = (frame_idx - ONLINE_DELAY)*default_time_step
-			for target in every_target:
-				if timestamp in target.all_time_stamps:
-					x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
-					y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
-					width = target.all_states[target.all_time_stamps.index(timestamp)][1]
-					height = target.all_states[target.all_time_stamps.index(timestamp)][2]
+			print self.living_targets_q
+			(delayed_frame_idx, delayed_liv_targets) = self.living_targets_q[0]
+			print delayed_frame_idx
+			print delayed_liv_targets
+			assert(delayed_frame_idx == frame_idx - ONLINE_DELAY), (delayed_frame_idx, frame_idx, ONLINE_DELAY)
+			for target in delayed_liv_targets:
+				assert(target.all_time_stamps[-1] == round((frame_idx - ONLINE_DELAY)*default_time_step, 1)), (target.all_time_stamps[-1], frame_idx, ONLINE_DELAY, round((frame_idx - ONLINE_DELAY)*default_time_step, 1))
+				x_pos = target.all_states[-1][0][0][0]
+				y_pos = target.all_states[-1][0][2][0]
+				width = target.all_states[-1][1]
+				height = target.all_states[-1][2]
+
+				left = x_pos - width/2.0
+				top = y_pos - height/2.0
+				right = x_pos + width/2.0
+				bottom = y_pos + height/2.0		 
+				f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+					(frame_idx - ONLINE_DELAY, target.id_, left, top, right, bottom))
+
+			if frame_idx == total_frame_count - 1:
+				q_idx = 1
+				for cur_frame_idx in range(frame_idx - ONLINE_DELAY + 1, total_frame_count - 1):
+					print '-'*20
+					print cur_frame_idx
+					print frame_idx - ONLINE_DELAY + 1
+					print total_frame_count
+					print q_idx
+					print len(self.living_targets_q)
+					(delayed_frame_idx, delayed_liv_targets) = self.living_targets_q[q_idx]
+					q_idx+=1
+					assert(delayed_frame_idx == cur_frame_idx), (delayed_frame_idx, cur_frame_idx, ONLINE_DELAY)
+					for target in delayed_liv_targets:
+						assert(target.all_time_stamps[-1] == round((cur_frame_idx)*default_time_step, 1))
+						x_pos = target.all_states[-1][0][0][0]
+						y_pos = target.all_states[-1][0][2][0]
+						width = target.all_states[-1][1]
+						height = target.all_states[-1][2]
+
+						left = x_pos - width/2.0
+						top = y_pos - height/2.0
+						right = x_pos + width/2.0
+						bottom = y_pos + height/2.0		 
+						f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
+							(cur_frame_idx, target.id_, left, top, right, bottom))
+				for target in self.living_targets:
+					assert(target.all_time_stamps[-1] == round(frame_idx*default_time_step, 1))
+					x_pos = target.all_states[-1][0][0][0]
+					y_pos = target.all_states[-1][0][2][0]
+					width = target.all_states[-1][1]
+					height = target.all_states[-1][2]
 
 					left = x_pos - width/2.0
 					top = y_pos - height/2.0
 					right = x_pos + width/2.0
 					bottom = y_pos + height/2.0		 
 					f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-						(frame_idx - ONLINE_DELAY, target.id_, left, top, right, bottom))
-
-			if frame_idx == total_frame_count - 1:
-				for cur_frame_idx in range(frame_idx - ONLINE_DELAY + 1, total_frame_count):
-					timestamp = (cur_frame_idx)*default_time_step
-					for target in every_target:
-						if timestamp in target.all_time_stamps:
-							x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
-							y_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][2][0]
-							width = target.all_states[target.all_time_stamps.index(timestamp)][1]
-							height = target.all_states[target.all_time_stamps.index(timestamp)][2]
-
-							left = x_pos - width/2.0
-							top = y_pos - height/2.0
-							right = x_pos + width/2.0
-							bottom = y_pos + height/2.0		 
-							f.write( "%d %d Car -1 -1 2.57 %d %d %d %d -1 -1 -1 -1000 -1000 -1000 -10 1\n" % \
-								(cur_frame_idx, target.id_, left, top, right, bottom))
-
+						(frame_idx, target.id_, left, top, right, bottom))
 
 	def write_targets_to_KITTI_format(self, num_frames, filename):
 		if USE_CREATE_CHILD:
 			every_target = self.collect_ancestral_targets()
 			f = open(filename, "w")
 			for frame_idx in range(num_frames):
-				timestamp = frame_idx*default_time_step
+				timestamp = round(frame_idx*default_time_step, 1)
 				for target in every_target:
 					if timestamp in target.all_time_stamps:
 						x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
@@ -613,7 +641,7 @@ class TargetSet:
 		else:
 			f = open(filename, "w")
 			for frame_idx in range(num_frames):
-				timestamp = frame_idx*default_time_step
+				timestamp = round(frame_idx*default_time_step, 1)
 				for target in self.all_targets:
 					if timestamp in target.all_time_stamps:
 						x_pos = target.all_states[target.all_time_stamps.index(timestamp)][0][0][0]
@@ -1456,7 +1484,7 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 	time_stamps = []
 	positions = []
 
-	iter = 1 # for plotting only occasionally
+	iter = 0 # for plotting only occasionally
 	number_resamplings = 0
 
 	#sanity check
@@ -1469,6 +1497,8 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 	prv_max_weight_particle = None
 
 	for time_instance_index in range(number_time_instances):
+		print
+		print "time_instance_index = ", time_instance_index, "!!!!!!"
 		time_stamp = target_sets[0].measurements[time_instance_index].time
 		for target_set in target_sets:
 			assert(target_set.measurements[time_instance_index].time == time_stamp)
@@ -1555,6 +1585,14 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 			#write current time step's results to results file
 			if time_instance_index >= ONLINE_DELAY:
 				cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index, number_time_instances)
+
+			print "popped on time_instance_index", time_instance_index
+			for particle in particle_set:
+				particle.targets.living_targets_q.popleft()
+
+			if ONLINE_DELAY != 0:
+				for particle in particle_set:
+					particle.targets.living_targets_q.append((time_instance_index, copy.deepcopy(particle.targets.living_targets)))
 
 		iter+=1
 
