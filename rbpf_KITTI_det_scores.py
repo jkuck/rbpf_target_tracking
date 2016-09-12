@@ -1577,14 +1577,14 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 				for cur_target in prv_max_weight_particle.targets.living_targets_q[0][1]:
 					print cur_target.id_,
 				print
-				print "q[1]target IDs before matching:",
-				for cur_target in prv_max_weight_particle.targets.living_targets_q[1][1]:
-					print cur_target.id_,
-				print
-				print "q[2]target IDs before matching:",
-				for cur_target in prv_max_weight_particle.targets.living_targets_q[2][1]:
-					print cur_target.id_,
-				print
+#				print "q[1]target IDs before matching:",
+#				for cur_target in prv_max_weight_particle.targets.living_targets_q[1][1]:
+#					print cur_target.id_,
+#				print
+#				print "q[2]target IDs before matching:",
+#				for cur_target in prv_max_weight_particle.targets.living_targets_q[2][1]:
+#					print cur_target.id_,
+#				print
 				print "cur target IDs before matching:",
 				for cur_target in prv_max_weight_particle.targets.living_targets:
 					print cur_target.id_,
@@ -1596,14 +1596,14 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
 					print cur_target.id_,
 				print
-				print "q[1]target IDs before matching:",
-				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
-					print cur_target.id_,
-				print
-				print "q[2]target IDs before matching:",
-				for cur_target in cur_max_weight_target_set.living_targets_q[2][1]:
-					print cur_target.id_,
-				print
+#				print "q[1]target IDs before matching:",
+#				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
+#					print cur_target.id_,
+#				print
+#				print "q[2]target IDs before matching:",
+#				for cur_target in cur_max_weight_target_set.living_targets_q[2][1]:
+#					print cur_target.id_,
+#				print
 				print "cur target IDs before matching:",
 				for cur_target in cur_max_weight_target_set.living_targets:
 					print cur_target.id_,
@@ -1643,14 +1643,14 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
 					print cur_target.id_,
 				print
-				print "q[1]target IDs after matching:",
-				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
-					print cur_target.id_,
-				print
-				print "q[2]target IDs after matching:",
-				for cur_target in cur_max_weight_target_set.living_targets_q[2][1]:
-					print cur_target.id_,
-				print
+#				print "q[1]target IDs after matching:",
+#				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
+#					print cur_target.id_,
+#				print
+#				print "q[2]target IDs after matching:",
+#				for cur_target in cur_max_weight_target_set.living_targets_q[2][1]:
+#					print cur_target.id_,
+#				print
 				print "cur target IDs after matching:",
 				for cur_target in cur_max_weight_target_set.living_targets:
 					print cur_target.id_,
