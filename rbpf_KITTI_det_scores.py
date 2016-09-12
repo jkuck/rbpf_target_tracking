@@ -52,7 +52,7 @@ ONLINE_DELAY = 1
 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
-MAX_1_MEAS_UPDATE = True
+MAX_1_MEAS_UPDATE = False
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
