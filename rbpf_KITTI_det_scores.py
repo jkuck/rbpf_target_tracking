@@ -85,7 +85,7 @@ USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check U
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-USE_CONSTANT_R = True
+USE_CONSTANT_R = False
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
