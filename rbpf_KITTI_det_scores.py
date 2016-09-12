@@ -39,10 +39,10 @@ np.random.seed(seed=5)
 import cProfile
 import time
 import os
-from run_experiment_batch_sherlock import DIRECTORY_OF_ALL_RESULTS
-from run_experiment_batch_sherlock import CUR_EXPERIMENT_BATCH_NAME
-from run_experiment_batch_sherlock import SEQUENCES_TO_PROCESS
-from run_experiment_batch_sherlock import get_description_of_run
+from run_experiment_batch import DIRECTORY_OF_ALL_RESULTS
+from run_experiment_batch import CUR_EXPERIMENT_BATCH_NAME
+from run_experiment_batch import SEQUENCES_TO_PROCESS
+from run_experiment_batch import get_description_of_run
 
 #create a big pedestrian bouding box to signify the max weight particle changed
 #print the frames since last association for each target
@@ -817,9 +817,10 @@ class Particle:
 		global PRV_MEASUREMENTS_HACK
 		global PRV_WIDTHS_HACK
 		global PRV_HEIGHTS_HACK
-		assert(len(PRV_MEASUREMENTS_HACK) == len(PRV_WIDTHS_HACK)), (len(PRV_MEASUREMENTS_HACK), len(PRV_WIDTHS_HACK), PRV_MEASUREMENTS_HACK, PRV_WIDTHS_HACK)
 		if PRV_MEASUREMENTS_HACK != None:
-			for idx, prv_meas in PRV_MEASUREMENTS_HACK:
+			assert(len(PRV_MEASUREMENTS_HACK) == len(PRV_WIDTHS_HACK)), (len(PRV_MEASUREMENTS_HACK), len(PRV_WIDTHS_HACK), PRV_MEASUREMENTS_HACK, PRV_WIDTHS_HACK)
+		if PRV_MEASUREMENTS_HACK != None:
+			for idx, prv_meas in enumerate(PRV_MEASUREMENTS_HACK):
 				prv_m_x1 = prv_meas[0] - float(PRV_WIDTHS_HACK[idx])/2.0
 				prv_m_x2 = prv_meas[0] + float(PRV_WIDTHS_HACK[idx])/2.0
 				prv_m_y1 = prv_meas[1] - float(PRV_HEIGHTS_HACK[idx])/2.0

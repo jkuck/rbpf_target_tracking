@@ -2,15 +2,15 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=10
-SEQUENCES_TO_PROCESS = [i for i in range(21)]
+NUM_RUNS=1
+#SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [11]
-#SEQUENCES_TO_PROCESS = [0]
+SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
-DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
-CUR_EXPERIMENT_BATCH_NAME = 'ignored_gt_death_probs'
-RUN_EVALUATION = True
+DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking/rbpf_results/allSequences/Online/locationBasedBirthClutterLikelihoods'
+CUR_EXPERIMENT_BATCH_NAME = 'DEBUGGING'
+RUN_EVALUATION = False
 
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
@@ -92,7 +92,7 @@ def submit_single_qsub_job(num_particles, include_ignored_gt=False, include_dont
 #		p = subprocess.Popen(args)
 
 
-		command = 'qsub -q atlas -l nodes=1:ppn=1 -l mem=4GB -v num_particles=%d,include_ignored_gt=%s,' \
+		command = 'qsub -q atlas -l nodes=1:ppn=1 -v num_particles=%d,include_ignored_gt=%s,' \
 				'include_dontcare_in_gt=%s,use_regionlets_and_lsvm=%s,sort_dets_on_intervals=%s,' \
 				'RUN_IDX=%d,NUM_RUNS=%d,SEQ_IDX=%d,PERIPHERAL=%s setup_rbpf_python_venv.sh' \
 		 		 % (num_particles, include_ignored_gt, include_dontcare_in_gt, use_regionlets_and_lsvm, \
@@ -133,17 +133,17 @@ if __name__ == "__main__":
 #								include_ignored_gt=False, include_dontcare_in_gt=False, 
 #								use_regionlets_and_lsvm=True, sort_dets_on_intervals=False)
 
-	#regionlets_only_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
-
-#	#regionlets_only_no_score_intervals
+#	#regionlets_only_with_score_intervals
 #	for num_particles in NUM_PARTICLES_TO_TEST:
 #		submit_single_experiment(num_particles=num_particles, 
 #								include_ignored_gt=False, include_dontcare_in_gt=False, 
-#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=False)
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+
+	#regionlets_only_no_score_intervals
+	for num_particles in NUM_PARTICLES_TO_TEST:
+		submit_single_experiment(num_particles=num_particles, 
+								include_ignored_gt=False, include_dontcare_in_gt=False, 
+								use_regionlets_and_lsvm=False, sort_dets_on_intervals=False)
 #
 #	#lsvm_and_regionlets_include_ignored_gt
 #	for num_particles in NUM_PARTICLES_TO_TEST:
