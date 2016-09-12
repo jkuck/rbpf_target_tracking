@@ -362,7 +362,7 @@ class trackingEvaluation(object):
                         t_data.score = -1
                     elif len(fields) == 18:
                         t_data.score  = float(fields[17])     # detection score
-                        if t_data.score < self.cutoff_score:
+                        if t_data.score <= self.cutoff_score:
                             continue
                     else:
                         self.mail.msg("file is not in KITTI format")

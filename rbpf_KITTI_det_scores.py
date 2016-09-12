@@ -51,7 +51,7 @@ from run_experiment_batch_sherlock import get_description_of_run
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
 #near online mode wait this many frames before picking max weight particle 
-ONLINE_DELAY = 3
+ONLINE_DELAY = 1
 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
@@ -117,9 +117,9 @@ def get_score_index(score_intervals, score):
 			index += 1
 		else:
 			break
-	assert(score > score_intervals[index])
+	assert(score > score_intervals[index]), (score, score_intervals[index], score_intervals[index+1]) 
 	if(index < len(score_intervals) - 1):
-		assert(score < score_intervals[index+1])
+		assert(score <= score_intervals[index+1]), (score, score_intervals[index], score_intervals[index+1])
 	return index
 
 
