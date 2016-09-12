@@ -26,6 +26,9 @@ sys.path.insert(0, "./KITTI_helpers")
 from learn_params1 import get_meas_target_set
 from learn_params1 import get_meas_target_sets_lsvm_and_regionlets
 from learn_params1 import get_meas_target_sets_regionlets_general_format
+from learn_params1 import get_meas_target_sets_mscnn_general_format
+from learn_params1 import get_meas_target_sets_mscnn_and_regionlets
+
 from jdk_helper_evaluate_results import eval_results
 
 #from multiple_meas_per_time_assoc_priors import HiddenState
@@ -52,7 +55,7 @@ ONLINE_DELAY = 1
 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
-MAX_1_MEAS_UPDATE = False
+MAX_1_MEAS_UPDATE = True
 
 ######DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
 ######CUR_EXPERIMENT_BATCH_NAME = 'test_copy_correctness_orig_copy'
@@ -85,7 +88,7 @@ USE_PYTHON_GAUSSIAN = False #if False bug, using R_default instead of S, check U
 #default time between succesive measurement time instances (in seconds)
 default_time_step = .1 
 
-USE_CONSTANT_R = False
+USE_CONSTANT_R = True
 #For testing why score interval for R are slow
 CACHED_LIKELIHOODS = 0
 NOT_CACHED_LIKELIHOODS = 0
@@ -1905,7 +1908,7 @@ if __name__ == "__main__":
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=10:
+	if len(sys.argv)!=11:
 		print "Supply 9 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
 		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs, seq_idx, peripheral"
 		print "received ", len(sys.argv), " arguments"
@@ -1936,10 +1939,11 @@ if __name__ == "__main__":
 	include_dontcare_in_gt = (sys.argv[3] == 'True')
 	use_regionlets_and_lsvm = (sys.argv[4] == 'True')
 	sort_dets_on_intervals = (sys.argv[5] == 'True')
+	use_regionlets = (sys.argv[10] == 'True')
 
 
 	DESCRIPTION_OF_RUN = get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
-						   use_regionlets_and_lsvm, sort_dets_on_intervals)
+						   use_regionlets_and_lsvm, sort_dets_on_intervals, use_regionlets)
 
 	results_folder_name = '%s/%d_particles' % (DESCRIPTION_OF_RUN, N_PARTICLES)
 #	results_folder = '%s/rbpf_KITTI_results_par_exec_trainAllButCurSeq_10runs_dup3/%s' % (DIRECTORY_OF_ALL_RESULTS, results_folder_name)
@@ -2064,11 +2068,13 @@ if __name__ == "__main__":
 			include_ignored_detections = True 
 
 			if sort_dets_on_intervals:
+				MSCNN_SCORE_INTERVALS = [float(i)*.1 for i in range(5,10)]				
 				REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
 				LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 		#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
 		#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 			else:
+				MSCNN_SCORE_INTERVALS = [.5]								
 				REGIONLETS_SCORE_INTERVALS = [2]
 				LSVM_SCORE_INTERVALS = [0]
 
@@ -2087,22 +2093,42 @@ if __name__ == "__main__":
 			#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
 			#training_sequences = [0]
 
-			#use regionlets and lsvm detections
-			if use_regionlets_and_lsvm:
-				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+#			#use regionlets and lsvm detections
+#			if use_regionlets_and_lsvm:
+#				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
+#				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+#					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+#						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+#						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+#						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+#						include_ignored_detections = include_ignored_detections)
+#
+#			#only use regionlets detections
+#			else: 
+#				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+#				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+#					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+#					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+#					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
+#					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+#					include_ignored_detections = include_ignored_detections)
+
+			#use mscnn and regionlets detections
+			if use_regionlets:
+				SCORE_INTERVALS = [MSCNN_SCORE_INTERVALS, REGIONLETS_SCORE_INTERVALS]
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+						get_meas_target_sets_mscnn_and_regionlets(training_sequences, MSCNN_SCORE_INTERVALS, \
+						REGIONLETS_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
 						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
 						include_ignored_detections = include_ignored_detections)
 
-			#only use regionlets detections
+			#only use mscnn detections
 			else: 
-				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
+				SCORE_INTERVALS = [MSCNN_SCORE_INTERVALS]
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+					get_meas_target_sets_mscnn_general_format(training_sequences, MSCNN_SCORE_INTERVALS, \
 					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
 					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
 					include_ignored_detections = include_ignored_detections)
@@ -2205,11 +2231,13 @@ if __name__ == "__main__":
 		include_ignored_detections = True 
 
 		if sort_dets_on_intervals:
+			MSCNN_SCORE_INTERVALS = [float(i)*.1 for i in range(5,10)]
 			REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
 			LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 	#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]
 	#		LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 		else:
+			MSCNN_SCORE_INTERVALS = [.5]				
 			REGIONLETS_SCORE_INTERVALS = [2]
 			LSVM_SCORE_INTERVALS = [0]
 

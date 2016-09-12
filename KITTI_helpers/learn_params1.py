@@ -2154,6 +2154,9 @@ def get_meas_target_sets_lsvm_and_regionlets(training_sequences, regionlets_scor
 
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
 
+
+
+
 def get_meas_target_sets_regionlets_general_format(training_sequences, regionlets_score_intervals, \
     obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
     include_dontcare_in_gt = False, include_ignored_detections = True):
@@ -2207,6 +2210,129 @@ def get_meas_target_sets_regionlets_general_format(training_sequences, regionlet
 
 ########## CLEAN THIS UP END
     birth_probabilities = [birth_probabilities_regionlets]
+    print "HELLO#8"
+
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+
+
+def get_meas_target_sets_mscnn_and_regionlets(training_sequences, mscnn_score_intervals, regionlets_score_intervals, \
+    obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
+    include_dontcare_in_gt = False, include_ignored_detections = True):
+    """
+    Input:
+    - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
+        and subtract .0000001 from element 0
+    """
+
+    print "HELLO#1"
+    (measurementTargetSetsBySequence_mscnn, target_emission_probs_mscnn, clutter_probabilities_mscnn, \
+        incorrect_birth_probabilities_mscnn, meas_noise_covs_mscnn) = get_meas_target_set(training_sequences, mscnn_score_intervals, \
+        "mscnn", obj_class, doctor_clutter_probs=doctor_clutter_probs, doctor_birth_probs=doctor_birth_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    print "HELLO#2"
+
+    (measurementTargetSetsBySequence_regionlets, target_emission_probs_regionlets, clutter_probabilities_regionlets, \
+        incorrect_birth_probabilities_regionlets, meas_noise_covs_regionlets) = get_meas_target_set(training_sequences, regionlets_score_intervals, \
+        "regionlets", obj_class, doctor_clutter_probs=doctor_clutter_probs, doctor_birth_probs=doctor_birth_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    print "HELLO#3"
+
+
+
+    returnTargSets = []
+    assert(len(measurementTargetSetsBySequence_regionlets) == len(measurementTargetSetsBySequence_mscnn))
+    for seq_idx in range(len(measurementTargetSetsBySequence_regionlets)):
+        returnTargSets.append([measurementTargetSetsBySequence_mscnn[seq_idx],\
+                               measurementTargetSetsBySequence_regionlets[seq_idx]])
+    print "HELLO#4"
+
+    emission_probs = [target_emission_probs_mscnn, target_emission_probs_regionlets]
+    clutter_probs = [clutter_probabilities_mscnn, clutter_probabilities_regionlets]
+    meas_noise_covs = [meas_noise_covs_mscnn, meas_noise_covs_regionlets]
+    print "HELLO#5"
+
+    mail = mailpy.Mail("") #this is silly and could be cleaned up
+    (gt_objects, mscnn_det_objects) = evaluate(min_score=mscnn_score_intervals[0], \
+        det_method='mscnn', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    print "HELLO#6"
+
+    (gt_objects, regionlets_det_objects) = evaluate(min_score=regionlets_score_intervals[0], \
+        det_method='regionlets', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    multi_detections = MultiDetections(gt_objects, mscnn_det_objects, regionlets_det_objects, training_sequences)
+    print "HELLO#7"
+
+    (birth_probabilities_mscnn, birth_probabilities_regionlets) = apply_function_on_intervals_2_det(mscnn_score_intervals, \
+        regionlets_score_intervals, multi_detections.get_birth_probabilities_score_range)
+
+    if(doctor_birth_probs):
+        doctor_birth_probabilities(birth_probabilities_mscnn)
+        doctor_birth_probabilities(birth_probabilities_regionlets)
+
+    birth_probabilities = [birth_probabilities_mscnn, birth_probabilities_regionlets]
+    print "HELLO#8"
+
+    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+
+
+    return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
+
+
+def get_meas_target_sets_mscnn_general_format(training_sequences, mscnn_score_intervals, \
+    obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, include_ignored_gt = False, \
+    include_dontcare_in_gt = False, include_ignored_detections = True):
+    """
+    Input:
+    - doctor_clutter_probs: if True, add extend clutter probability list with 20 values of .0000001/20
+        and subtract .0000001 from element 0
+    """
+
+    print "HELLO#1"
+    (measurementTargetSetsBySequence_mscnn, target_emission_probs_mscnn, clutter_probabilities_mscnn, \
+        incorrect_birth_probabilities_mscnn, meas_noise_covs_mscnn) = get_meas_target_set(training_sequences, mscnn_score_intervals, \
+        "mscnn", obj_class, doctor_clutter_probs=doctor_clutter_probs, doctor_birth_probs=doctor_birth_probs, include_ignored_gt=include_ignored_gt, \
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    print "HELLO#2"
+
+
+    returnTargSets = []
+    for seq_idx in range(len(measurementTargetSetsBySequence_mscnn)):
+        returnTargSets.append([measurementTargetSetsBySequence_mscnn[seq_idx]])
+    print "HELLO#4"
+
+    emission_probs = [target_emission_probs_mscnn]
+    clutter_probs = [clutter_probabilities_mscnn]
+    meas_noise_covs = [meas_noise_covs_mscnn]
+    print "HELLO#5"
+
+    mail = mailpy.Mail("") #this is silly and could be cleaned up
+    (gt_objects, mscnn_det_objects) = evaluate(min_score=mscnn_score_intervals[0], \
+        det_method='mscnn', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    print "HELLO#6"
+
+########### CLEAN THIS UP BEGIN
+#    lsvm_score_intervals = [2] #arbitrary!
+#    (gt_objects, lsvm_det_objects) = evaluate(min_score=lsvm_score_intervals[0], \
+#        det_method='lsvm', mail=mail, obj_class=obj_class, include_ignored_gt=include_ignored_gt,\
+#        include_dontcare_in_gt=include_dontcare_in_gt, include_ignored_detections=include_ignored_detections)
+    multi_detections = MultiDetections(gt_objects, mscnn_det_objects, mscnn_det_objects, training_sequences)
+    print "HELLO#7"
+
+    (birth_probabilities_mscnn, birth_probabilities_lsvm_nonsense) = apply_function_on_intervals_2_det(mscnn_score_intervals, \
+        mscnn_score_intervals, multi_detections.get_birth_probabilities_score_range)
+
+    (death_probs_near_border, death_counts_near_border, living_counts_near_border) = multi_detections.get_death_probs(near_border = True)
+    (death_probs_not_near_border, death_counts_not_near_border, living_counts_not_near_border) = multi_detections.get_death_probs(near_border = False)
+
+    if(doctor_birth_probs):
+        doctor_birth_probabilities(birth_probabilities_mscnn)
+        doctor_birth_probabilities(birth_probabilities_lsvm_nonsense)
+
+########## CLEAN THIS UP END
+    birth_probabilities = [birth_probabilities_mscnn]
     print "HELLO#8"
 
     return (returnTargSets, emission_probs, clutter_probs, birth_probabilities, meas_noise_covs, death_probs_near_border, death_probs_not_near_border)
