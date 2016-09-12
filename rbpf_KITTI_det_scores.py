@@ -686,7 +686,9 @@ class Particle:
 		self.pi_targets_debug = []
 
 	def create_child(self):
-		child_particle = Particle(self.id_)
+		global NEXT_PARTICLE_ID
+		child_particle = Particle(NEXT_PARTICLE_ID)
+		NEXT_PARTICLE_ID += 1
 		child_particle.importance_weight = self.importance_weight
 		child_particle.targets = self.targets.create_child()
 		return child_particle
@@ -1474,9 +1476,10 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 	- number_resamplings: the number of times resampling was performed
 	"""
 	particle_set = []
+	global NEXT_PARTICLE_ID
 	for i in range(0, N_PARTICLES):
-		particle_set.append(Particle(i))
-
+		particle_set.append(Particle(NEXT_PARTICLE_ID))
+		NEXT_PARTICLE_ID += 1
 	prev_time_stamp = -1
 
 
@@ -1551,12 +1554,6 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 #			display_target_counts(particle_set, time_stamp)
 
 
-		if (get_eff_num_particles(particle_set) < N_PARTICLES/RESAMPLE_RATIO):
-			perform_resampling(particle_set)
-			print "resampled on iter: ", iter
-			number_resamplings += 1
-		prev_time_stamp = time_stamp
-
 		if RUN_ONLINE:
 			if time_instance_index >= ONLINE_DELAY:
 				#find the particle that currently has the largest importance weight
@@ -1570,10 +1567,51 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 					if(particle.importance_weight == max_imprt_weight):
 						cur_max_weight_target_set = particle.targets		
 						cur_max_weight_particle = particle
+				print "max weight particle id = ", cur_max_weight_particle.id_
+
 
 			if prv_max_weight_particle != None and prv_max_weight_particle != cur_max_weight_particle:
+				print '-'*10
+				print "Previous max weight particle:"
+				print "q[0]target IDs before matching:",
+				for cur_target in prv_max_weight_particle.targets.living_targets_q[0][1]:
+					print cur_target.id_,
+				print
+				print "q[1]target IDs before matching:",
+				for cur_target in prv_max_weight_particle.targets.living_targets_q[1][1]:
+					print cur_target.id_,
+				print
+				print "q[2]target IDs before matching:",
+				for cur_target in prv_max_weight_particle.targets.living_targets_q[2][1]:
+					print cur_target.id_,
+				print
+				print "cur target IDs before matching:",
+				for cur_target in prv_max_weight_particle.targets.living_targets:
+					print cur_target.id_,
+				print
+
+
+				print "Current max weight particle:"
+				print "q[0]target IDs before matching:",
+				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
+					print cur_target.id_,
+				print
+				print "q[1]target IDs before matching:",
+				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
+					print cur_target.id_,
+				print
+				print "q[2]target IDs before matching:",
+				for cur_target in cur_max_weight_target_set.living_targets_q[2][1]:
+					print cur_target.id_,
+				print
+				print "cur target IDs before matching:",
+				for cur_target in cur_max_weight_target_set.living_targets:
+					print cur_target.id_,
+				print
+
+
 				if ONLINE_DELAY == 0:
-					target_associations = match_target_ids(cur_max_weight_target_set.living_targets,\
+					(target_associations, duplicate_ids) = match_target_ids(cur_max_weight_target_set.living_targets,\
 														   prv_max_weight_particle.targets.living_targets)
 					#replace associated target IDs with the IDs from the previous maximum importance weight
 					#particle for ID conistency in the online results we output
@@ -1584,17 +1622,44 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 					#print time_instance_index
 					#print cur_max_weight_target_set.living_targets_q
 					#print prv_max_weight_particle.targets.living_targets_q
-					target_associations = match_target_ids(cur_max_weight_target_set.living_targets_q[0][1],\
+					(target_associations, duplicate_ids) = match_target_ids(cur_max_weight_target_set.living_targets_q[0][1],\
 														   prv_max_weight_particle.targets.living_targets_q[0][1])
 					#replace associated target IDs with the IDs from the previous maximum importance weight
 					#particle for ID conistency in the online results we output
 					for q_idx in range(ONLINE_DELAY):
 						for cur_target in cur_max_weight_target_set.living_targets_q[q_idx][1]:
+							if cur_target.id_ in duplicate_ids:
+								cur_target.id_ = duplicate_ids[cur_target.id_]
 							if cur_target.id_ in target_associations:
 								cur_target.id_ = target_associations[cur_target.id_]
 					for cur_target in cur_max_weight_target_set.living_targets:
+						if cur_target.id_ in duplicate_ids:
+							cur_target.id_ = duplicate_ids[cur_target.id_]						
 						if cur_target.id_ in target_associations:
 							cur_target.id_ = target_associations[cur_target.id_]
+
+
+				print "q[0]target IDs after matching:",
+				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
+					print cur_target.id_,
+				print
+				print "q[1]target IDs after matching:",
+				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
+					print cur_target.id_,
+				print
+				print "q[2]target IDs after matching:",
+				for cur_target in cur_max_weight_target_set.living_targets_q[2][1]:
+					print cur_target.id_,
+				print
+				print "cur target IDs after matching:",
+				for cur_target in cur_max_weight_target_set.living_targets:
+					print cur_target.id_,
+				print
+
+				print "duplicate IDs:"
+				print duplicate_ids
+				print "target_associations:"
+				print target_associations
 
 			if time_instance_index >= ONLINE_DELAY:
 				prv_max_weight_particle = cur_max_weight_particle
@@ -1610,6 +1675,12 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 			if ONLINE_DELAY != 0:
 				for particle in particle_set:
 					particle.targets.living_targets_q.append((time_instance_index, copy.deepcopy(particle.targets.living_targets)))
+		
+		if (get_eff_num_particles(particle_set) < N_PARTICLES/RESAMPLE_RATIO):
+			perform_resampling(particle_set)
+			print "resampled on iter: ", iter
+			number_resamplings += 1
+		prev_time_stamp = time_stamp
 
 		iter+=1
 
@@ -1786,12 +1857,14 @@ def match_target_ids(particle1_targets, particle2_targets):
 
 	#if any targets in particle1 have the same ID as a target in particle2,
 	#assign the particle1 target a new ID
+	duplicate_ids = {}
 	global NEXT_TARGET_ID
 	p2_target_ids = []
 	for cur_t2 in particle2_targets:
 		p2_target_ids.append(cur_t2.id_)
 	for cur_t1 in particle1_targets:
 		if cur_t1.id_ in p2_target_ids:
+			duplicate_ids[cur_t1.id_] = NEXT_TARGET_ID
 			cur_t1.id_ = NEXT_TARGET_ID
 			NEXT_TARGET_ID += 1
 
@@ -1821,11 +1894,12 @@ def match_target_ids(particle1_targets, particle2_targets):
 		if c < max_cost:
 			associations[particle1_targets[row].id_] = particle2_targets[col].id_
 
-	return associations
+	return (associations, duplicate_ids)
 
 
 if __name__ == "__main__":
 	
+	NEXT_PARTICLE_ID = 0
 	if RUN_ONLINE:
 		NEXT_TARGET_ID = 0 #all targets have unique IDs, even if they are in different particles
 	
