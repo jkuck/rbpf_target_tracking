@@ -51,8 +51,10 @@ from run_experiment_batch_sherlock import get_description_of_run
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
 #near online mode wait this many frames before picking max weight particle 
-ONLINE_DELAY = 3
-
+ONLINE_DELAY = 0
+#if ONLINE_DELAY is 0, write results of the particle with the largest importance
+#weight times current likelihood, double check doing this correctly
+FIND_MAX_IMPRT_TIMES_LIKELIHOOD = True 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
 MAX_1_MEAS_UPDATE = True
@@ -673,7 +675,7 @@ class Particle:
 		self.targets = TargetSet()
 
 		self.importance_weight = 1.0/N_PARTICLES
-
+		self.likelihood_DOUBLE_CHECK_ME = -1
 		#cache for memoizing association likelihood computation
 		self.assoc_likelihood_cache = {}
 
@@ -798,6 +800,8 @@ class Particle:
 		imprt_re_weight = exact_probability/proposal_probability
 
 		assert(imprt_re_weight != 0.0), (exact_probability, proposal_probability)
+
+		self.likelihood_DOUBLE_CHECK_ME = exact_probability
 
 		return (measurement_associations, targets_to_kill, imprt_re_weight)
 
@@ -1560,26 +1564,41 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 		if RUN_ONLINE:
 			if time_instance_index >= ONLINE_DELAY:
 				#find the particle that currently has the largest importance weight
-				max_imprt_weight = -1
-				for particle in particle_set:
-					if(particle.importance_weight > max_imprt_weight):
-						max_imprt_weight = particle.importance_weight
-				cur_max_weight_target_set = None
-				cur_max_weight_particle = None
-				for particle in particle_set:
-					if(particle.importance_weight == max_imprt_weight):
-						cur_max_weight_target_set = particle.targets		
-						cur_max_weight_particle = particle
-				print "max weight particle id = ", cur_max_weight_particle.id_
+
+				if FIND_MAX_IMPRT_TIMES_LIKELIHOOD:
+					max_weight = -1
+					for particle in particle_set:
+						if(particle.importance_weight*particle.likelihood_DOUBLE_CHECK_ME > max_weight):
+							max_weight = particle.importance_weight*particle.likelihood_DOUBLE_CHECK_ME
+					cur_max_weight_target_set = None
+					cur_max_weight_particle = None
+					for particle in particle_set:
+						if(particle.importance_weight*particle.likelihood_DOUBLE_CHECK_ME == max_weight):
+							cur_max_weight_target_set = particle.targets		
+							cur_max_weight_particle = particle
+					print "max weight particle id = ", cur_max_weight_particle.id_
+
+				else:
+					max_imprt_weight = -1
+					for particle in particle_set:
+						if(particle.importance_weight > max_imprt_weight):
+							max_imprt_weight = particle.importance_weight
+					cur_max_weight_target_set = None
+					cur_max_weight_particle = None
+					for particle in particle_set:
+						if(particle.importance_weight == max_imprt_weight):
+							cur_max_weight_target_set = particle.targets		
+							cur_max_weight_particle = particle
+					print "max weight particle id = ", cur_max_weight_particle.id_
 
 
 			if prv_max_weight_particle != None and prv_max_weight_particle != cur_max_weight_particle:
-				print '-'*10
-				print "Previous max weight particle:"
-				print "q[0]target IDs before matching:",
-				for cur_target in prv_max_weight_particle.targets.living_targets_q[0][1]:
-					print cur_target.id_,
-				print
+#				print '-'*10
+#				print "Previous max weight particle:"
+#				print "q[0]target IDs before matching:",
+#				for cur_target in prv_max_weight_particle.targets.living_targets_q[0][1]:
+#					print cur_target.id_,
+#				print
 #				print "q[1]target IDs before matching:",
 #				for cur_target in prv_max_weight_particle.targets.living_targets_q[1][1]:
 #					print cur_target.id_,
@@ -1594,11 +1613,11 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 				print
 
 
-				print "Current max weight particle:"
-				print "q[0]target IDs before matching:",
-				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
-					print cur_target.id_,
-				print
+#				print "Current max weight particle:"
+#				print "q[0]target IDs before matching:",
+#				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
+#					print cur_target.id_,
+#				print
 #				print "q[1]target IDs before matching:",
 #				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
 #					print cur_target.id_,
@@ -1642,10 +1661,10 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 							cur_target.id_ = target_associations[cur_target.id_]
 
 
-				print "q[0]target IDs after matching:",
-				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
-					print cur_target.id_,
-				print
+#				print "q[0]target IDs after matching:",
+#				for cur_target in cur_max_weight_target_set.living_targets_q[0][1]:
+#					print cur_target.id_,
+#				print
 #				print "q[1]target IDs after matching:",
 #				for cur_target in cur_max_weight_target_set.living_targets_q[1][1]:
 #					print cur_target.id_,
