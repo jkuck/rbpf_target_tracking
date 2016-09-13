@@ -51,10 +51,10 @@ from run_experiment_batch_sherlock import get_description_of_run
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
 #near online mode wait this many frames before picking max weight particle 
-ONLINE_DELAY = 0
-#if ONLINE_DELAY is 0, write results of the particle with the largest importance
+ONLINE_DELAY = 3
+#Write results of the particle with the largest importance
 #weight times current likelihood, double check doing this correctly
-FIND_MAX_IMPRT_TIMES_LIKELIHOOD = True 
+FIND_MAX_IMPRT_TIMES_LIKELIHOOD = False 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
 MAX_1_MEAS_UPDATE = True
@@ -2088,7 +2088,7 @@ if __name__ == "__main__":
 			include_ignored_detections = True 
 
 			if sort_dets_on_intervals:
-				MSCNN_SCORE_INTERVALS = [float(i)*.1 for i in range(5,10)]				
+				MSCNN_SCORE_INTERVALS = [float(i)*.1 for i in range(1,10)]				
 				REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
 				LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 		#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]

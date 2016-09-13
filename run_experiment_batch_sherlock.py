@@ -8,9 +8,9 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
-DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/9-10-tests'
+DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/experiment_mscnn_score_intervals/Rto0_4xQ_max1MeasUpdate_nearOnline3frameDelay/'
 
-CUR_EXPERIMENT_BATCH_NAME = 'Rto0_4xQ_max1MeasUpdate_debuggedUpdateLastAssoc_online0frameDelay_maxImprtTimesLikelihood'
+CUR_EXPERIMENT_BATCH_NAME = 'greaterThan.1_.1intervals'
 RUN_EVALUATION = False
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
@@ -211,20 +211,20 @@ if __name__ == "__main__":
 
 
 ####################################################################################################
-	#mscnn_only_with_score_intervals_include_ignored_gt
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=True, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
-								use_regionlets = False)
-
-	#mscnn_only_with_score_intervals_include_ignored_and_dontcare_in_gt
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=True, include_dontcare_in_gt=True, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
-								use_regionlets = False)
-
+#	#mscnn_only_with_score_intervals_include_ignored_gt
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=True, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
+#								use_regionlets = False)
+#
+#	#mscnn_only_with_score_intervals_include_ignored_and_dontcare_in_gt
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=True, include_dontcare_in_gt=True, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
+#								use_regionlets = False)
+#
 
 	#mscnn_only_with_score_intervals
 	for num_particles in NUM_PARTICLES_TO_TEST:
