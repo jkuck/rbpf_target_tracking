@@ -51,7 +51,7 @@ from run_experiment_batch_sherlock import get_description_of_run
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
 #near online mode wait this many frames before picking max weight particle 
-ONLINE_DELAY = 1
+ONLINE_DELAY = 3
 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)
@@ -177,8 +177,8 @@ P_default = np.array([[40.64558317, 0, 			 0, 0],
 #from learn_params1, not counting 'ignored' ground truth
 #R_default = np.array([[ 40.64558317,   0.14036472],
 # 					  [  0.14036472,   5.56278505]])
-R_default = np.array([[ 0.1,   0.0],
- 					  [ 0.0,   0.1]])
+R_default = np.array([[ 0.0,   0.0],
+ 					  [ 0.0,   0.0]])
 
 
 #learned from all GT
