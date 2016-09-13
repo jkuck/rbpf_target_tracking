@@ -1690,11 +1690,12 @@ def run_rbpf_on_targetset(target_sets, online_results_filename):
 			if time_instance_index >= ONLINE_DELAY:
 				cur_max_weight_target_set.write_online_results(online_results_filename, time_instance_index, number_time_instances)
 
-			print "popped on time_instance_index", time_instance_index
-			for particle in particle_set:
-				particle.targets.living_targets_q.popleft()
 
 			if ONLINE_DELAY != 0:
+				print "popped on time_instance_index", time_instance_index
+				for particle in particle_set:
+					particle.targets.living_targets_q.popleft()
+
 				for particle in particle_set:
 					particle.targets.living_targets_q.append((time_instance_index, copy.deepcopy(particle.targets.living_targets)))
 		
