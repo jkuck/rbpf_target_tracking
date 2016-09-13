@@ -51,7 +51,7 @@ from run_experiment_batch_sherlock import get_description_of_run
 USE_CREATE_CHILD = True #speed up copying during resampling
 RUN_ONLINE = True #save online results 
 #near online mode wait this many frames before picking max weight particle 
-ONLINE_DELAY = 1
+ONLINE_DELAY = 3
 
 #if true only update a target with at most one measurement
 #(i.e. not regionlets and then lsvm)

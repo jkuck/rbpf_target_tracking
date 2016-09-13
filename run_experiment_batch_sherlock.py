@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/9-10-tests'
 
-CUR_EXPERIMENT_BATCH_NAME = 'Rnear0_4xQ_max1MeasUpdate_debuggedUpdateLastAssoc_nearOnline1frameDelay'
+CUR_EXPERIMENT_BATCH_NAME = 'Rnear0_4xQ_max1MeasUpdate_debuggedUpdateLastAssoc_nearOnline3frameDelay'
 RUN_EVALUATION = False
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
@@ -226,17 +226,16 @@ if __name__ == "__main__":
 								use_regionlets = False)
 
 
-#	#mscnn_only_with_score_intervals
-#	for num_particles in NUM_PARTICLES_TO_TEST:
-#		submit_single_experiment(num_particles=num_particles, 
-#								include_ignored_gt=False, include_dontcare_in_gt=False, 
-#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
-#								use_regionlets = False)
-#
-#	#mscnn_and_regionlets_with_score_intervals
-#	for num_particles in NUM_PARTICLES_TO_TEST:
-#		submit_single_experiment(num_particles=num_particles, 
-#								include_ignored_gt=False, include_dontcare_in_gt=False, 
-#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
-#								use_regionlets = True)
-#
+	#mscnn_only_with_score_intervals
+	for num_particles in NUM_PARTICLES_TO_TEST:
+		submit_single_experiment(num_particles=num_particles, 
+								include_ignored_gt=False, include_dontcare_in_gt=False, 
+								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
+								use_regionlets = False)
+
+	#mscnn_and_regionlets_with_score_intervals
+	for num_particles in NUM_PARTICLES_TO_TEST:
+		submit_single_experiment(num_particles=num_particles, 
+								include_ignored_gt=False, include_dontcare_in_gt=False, 
+								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
+								use_regionlets = True)
