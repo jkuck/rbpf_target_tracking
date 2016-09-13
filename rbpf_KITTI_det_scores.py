@@ -2088,7 +2088,7 @@ if __name__ == "__main__":
 			include_ignored_detections = True 
 
 			if sort_dets_on_intervals:
-				MSCNN_SCORE_INTERVALS = [float(i)*.1 for i in range(2,10)]				
+				MSCNN_SCORE_INTERVALS = [float(i)*.1 for i in range(4,10)]				
 				REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 20)]
 				LSVM_SCORE_INTERVALS = [i/2.0 for i in range(0, 6)]
 		#		REGIONLETS_SCORE_INTERVALS = [i for i in range(2, 16)]

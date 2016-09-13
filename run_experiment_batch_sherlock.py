@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/experiment_mscnn_score_intervals/Rto0_4xQ_max1MeasUpdate_nearOnline3frameDelay/'
 
-CUR_EXPERIMENT_BATCH_NAME = 'greaterThan.2_.1intervals'
+CUR_EXPERIMENT_BATCH_NAME = 'greaterThan.4_.1intervals'
 RUN_EVALUATION = False
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
