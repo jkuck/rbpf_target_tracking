@@ -2,15 +2,15 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=1
+NUM_RUNS=10
 SEQUENCES_TO_PROCESS = [i for i in range(21)]
 #SEQUENCES_TO_PROCESS = [11]
 #SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
-DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/experiment_mscnn_score_intervals/Rto0_4xQ_max1MeasUpdate_online0frameDelay/'
+DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/officialPaperTrainingExperiments/'
 
-CUR_EXPERIMENT_BATCH_NAME = 'greaterThan.5_.1intervals_maxImprtNoLikelihood'
+CUR_EXPERIMENT_BATCH_NAME = 'Rto0_4xQ_max1MeasUpdate_online0frameDelay'
 RUN_EVALUATION = False
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
