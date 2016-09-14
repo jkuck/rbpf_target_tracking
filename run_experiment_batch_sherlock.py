@@ -177,6 +177,13 @@ if __name__ == "__main__":
 #								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
 
 
+
+	#regionlets_only_with_score_intervals
+	for num_particles in NUM_PARTICLES_TO_TEST:
+		submit_single_experiment(num_particles=num_particles, 
+								include_ignored_gt=False, include_dontcare_in_gt=False, 
+								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+
 #	#regionlets_only_no_score_intervals
 #	for num_particles in NUM_PARTICLES_TO_TEST:
 #		submit_single_experiment(num_particles=num_particles, 
@@ -226,16 +233,17 @@ if __name__ == "__main__":
 #								use_regionlets = False)
 #
 
-	#mscnn_only_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
-								use_regionlets = False)
-
-	#mscnn_and_regionlets_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
-								use_regionlets = True)
+#	#mscnn_only_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
+#								use_regionlets = False)
+#
+#	#mscnn_and_regionlets_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True,
+#								use_regionlets = True)
+#

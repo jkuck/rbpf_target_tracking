@@ -1959,7 +1959,8 @@ if __name__ == "__main__":
 	include_dontcare_in_gt = (sys.argv[3] == 'True')
 	use_regionlets_and_lsvm = (sys.argv[4] == 'True')
 	sort_dets_on_intervals = (sys.argv[5] == 'True')
-	use_regionlets = (sys.argv[10] == 'True')
+#	use_regionlets = (sys.argv[10] == 'True')
+	use_regionlets = None
 
 
 	DESCRIPTION_OF_RUN = get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
@@ -2113,46 +2114,46 @@ if __name__ == "__main__":
 			#training_sequences = [i for i in SEQUENCES_TO_PROCESS if i != seq_idx]
 			#training_sequences = [0]
 
-#			#use regionlets and lsvm detections
-#			if use_regionlets_and_lsvm:
-#				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
-#				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-#					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-#						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-#						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
-#						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
-#						include_ignored_detections = include_ignored_detections)
-#
-#			#only use regionlets detections
-#			else: 
-#				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
-#				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
-#					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-#					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
-#					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
-#					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
-#					include_ignored_detections = include_ignored_detections)
-
-			#use mscnn and regionlets detections
-			if use_regionlets:
-				SCORE_INTERVALS = [MSCNN_SCORE_INTERVALS, REGIONLETS_SCORE_INTERVALS]
+			#use regionlets and lsvm detections
+			if use_regionlets_and_lsvm:
+				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS, LSVM_SCORE_INTERVALS]
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-						get_meas_target_sets_mscnn_and_regionlets(training_sequences, MSCNN_SCORE_INTERVALS, \
-						REGIONLETS_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+						get_meas_target_sets_lsvm_and_regionlets(training_sequences, REGIONLETS_SCORE_INTERVALS, \
+						LSVM_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
 						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
 						include_ignored_detections = include_ignored_detections)
 
-			#only use mscnn detections
+			#only use regionlets detections
 			else: 
-				SCORE_INTERVALS = [MSCNN_SCORE_INTERVALS]
+				SCORE_INTERVALS = [REGIONLETS_SCORE_INTERVALS]
 				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
 					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
-					get_meas_target_sets_mscnn_general_format(training_sequences, MSCNN_SCORE_INTERVALS, \
+					get_meas_target_sets_regionlets_general_format(training_sequences, REGIONLETS_SCORE_INTERVALS, \
 					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
 					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
 					include_ignored_detections = include_ignored_detections)
 
+			#use mscnn and regionlets detections
+#			if use_regionlets:
+#				SCORE_INTERVALS = [MSCNN_SCORE_INTERVALS, REGIONLETS_SCORE_INTERVALS]
+#				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+#					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+#						get_meas_target_sets_mscnn_and_regionlets(training_sequences, MSCNN_SCORE_INTERVALS, \
+#						REGIONLETS_SCORE_INTERVALS, obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True,\
+#						include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+#						include_ignored_detections = include_ignored_detections)
+#
+#			#only use mscnn detections
+#			else: 
+#				SCORE_INTERVALS = [MSCNN_SCORE_INTERVALS]
+#				(measurementTargetSetsBySequence, TARGET_EMISSION_PROBS, CLUTTER_PROBABILITIES, BIRTH_PROBABILITIES,\
+#					MEAS_NOISE_COVS, BORDER_DEATH_PROBABILITIES, NOT_BORDER_DEATH_PROBABILITIES) = \
+#					get_meas_target_sets_mscnn_general_format(training_sequences, MSCNN_SCORE_INTERVALS, \
+#					obj_class = "car", doctor_clutter_probs = True, doctor_birth_probs = True, \
+#					include_ignored_gt = include_ignored_gt, include_dontcare_in_gt = include_dontcare_in_gt, \
+#					include_ignored_detections = include_ignored_detections)
+#
 			#print "BORDER_DEATH_PROBABILITIES =", BORDER_DEATH_PROBABILITIES
 			#print "NOT_BORDER_DEATH_PROBABILITIES =", NOT_BORDER_DEATH_PROBABILITIES
 
