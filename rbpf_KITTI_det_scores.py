@@ -1928,7 +1928,7 @@ if __name__ == "__main__":
 	
 	# check for correct number of arguments. if user_sha and email are not supplied,
 	# no notification email is sent (this option is used for auto-updates)
-	if len(sys.argv)!=11:
+	if len(sys.argv)!=10:
 		print "Supply 9 arguments: the number of particles (int), include_ignored_gt (bool), include_dontcare_in_gt (bool),"
 		print "use_regionlets_and_lsvm (bool), sort_dets_on_intervals (bool), run_idx, total_runs, seq_idx, peripheral"
 		print "received ", len(sys.argv), " arguments"
