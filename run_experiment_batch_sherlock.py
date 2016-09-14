@@ -10,7 +10,7 @@ SEQUENCES_TO_PROCESS = [i for i in range(21)]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/scratch/users/kuck/rbpf_results/allSequences/Online/officialPaperTrainingExperiments/'
 
-CUR_EXPERIMENT_BATCH_NAME = 'Rto0_4xQ_max1MeasUpdate_online3frameDelay'
+CUR_EXPERIMENT_BATCH_NAME = 'Rto0_4xQ_max1MeasUpdate_online0frameDelay'
 RUN_EVALUATION = False
 
 def get_description_of_run(include_ignored_gt, include_dontcare_in_gt, 
