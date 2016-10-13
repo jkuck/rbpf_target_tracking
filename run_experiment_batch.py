@@ -2,14 +2,14 @@ import subprocess
 import os
 import errno
 
-NUM_RUNS=10
-SEQUENCES_TO_PROCESS = [i for i in range(21)]
-#SEQUENCES_TO_PROCESS = [11]
+NUM_RUNS=100
+#SEQUENCES_TO_PROCESS = [i for i in range(21)]
+SEQUENCES_TO_PROCESS = [11]
 #SEQUENCES_TO_PROCESS = [0]
 #NUM_PARTICLES_TO_TEST = [25, 100]
 NUM_PARTICLES_TO_TEST = [100]
 DIRECTORY_OF_ALL_RESULTS = '/atlas/u/jkuck/rbpf_target_tracking'
-CUR_EXPERIMENT_BATCH_NAME = 'ignored_gt_death_probs'
+CUR_EXPERIMENT_BATCH_NAME = '100_particle_missing_result_test_interactiveProfiling'
 RUN_EVALUATION = True
 
 
@@ -92,7 +92,7 @@ def submit_single_qsub_job(num_particles, include_ignored_gt=False, include_dont
 #		p = subprocess.Popen(args)
 
 
-		command = 'qsub -q atlas -l nodes=1:ppn=1 -l mem=4GB -v num_particles=%d,include_ignored_gt=%s,' \
+		command = 'qsub -q atlas -l nodes=1:ppn=1 -v num_particles=%d,include_ignored_gt=%s,' \
 				'include_dontcare_in_gt=%s,use_regionlets_and_lsvm=%s,sort_dets_on_intervals=%s,' \
 				'RUN_IDX=%d,NUM_RUNS=%d,SEQ_IDX=%d,PERIPHERAL=%s setup_rbpf_python_venv.sh' \
 		 		 % (num_particles, include_ignored_gt, include_dontcare_in_gt, use_regionlets_and_lsvm, \
@@ -109,36 +109,36 @@ def submit_single_experiment(num_particles, include_ignored_gt=False, include_do
 	use_regionlets_and_lsvm=True, sort_dets_on_intervals=True):
 	setup_results_folder(num_particles, include_ignored_gt, include_dontcare_in_gt, \
 					   	 use_regionlets_and_lsvm, sort_dets_on_intervals)
-	for run_idx in range(1, NUM_RUNS+1):
-		for seq_idx in SEQUENCES_TO_PROCESS:
-			submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
-				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
-				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=run_idx, seq_idx=seq_idx, peripheral='run')
-	if RUN_EVALUATION:
-		submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
-				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
-				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=-1, seq_idx=-1, peripheral='evaluate')
+#	for run_idx in range(1, NUM_RUNS+1):
+#		for seq_idx in SEQUENCES_TO_PROCESS:
+#			submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
+#				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
+#				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=run_idx, seq_idx=seq_idx, peripheral='run')
+#	if RUN_EVALUATION:
+#		submit_single_qsub_job(num_particles=num_particles, include_ignored_gt=include_ignored_gt, 
+#				include_dontcare_in_gt=include_dontcare_in_gt, use_regionlets_and_lsvm=use_regionlets_and_lsvm, 
+#				sort_dets_on_intervals=sort_dets_on_intervals, run_idx=-1, seq_idx=-1, peripheral='evaluate')
 
 
 if __name__ == "__main__":
-#	#lsvm_and_regionlets_with_score_intervals
-#	for num_particles in NUM_PARTICLES_TO_TEST:
-#		submit_single_experiment(num_particles=num_particles, 
-#								include_ignored_gt=False, include_dontcare_in_gt=False, 
-#								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
-#
+	#lsvm_and_regionlets_with_score_intervals
+	for num_particles in NUM_PARTICLES_TO_TEST:
+		submit_single_experiment(num_particles=num_particles, 
+								include_ignored_gt=False, include_dontcare_in_gt=False, 
+								use_regionlets_and_lsvm=True, sort_dets_on_intervals=True)
+
 #	#lsvm_and_regionlets_no_score_intervals
 #	for num_particles in NUM_PARTICLES_TO_TEST:
 #		submit_single_experiment(num_particles=num_particles, 
 #								include_ignored_gt=False, include_dontcare_in_gt=False, 
 #								use_regionlets_and_lsvm=True, sort_dets_on_intervals=False)
-
-	#regionlets_only_with_score_intervals
-	for num_particles in NUM_PARTICLES_TO_TEST:
-		submit_single_experiment(num_particles=num_particles, 
-								include_ignored_gt=False, include_dontcare_in_gt=False, 
-								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
-
+#
+#	#regionlets_only_with_score_intervals
+#	for num_particles in NUM_PARTICLES_TO_TEST:
+#		submit_single_experiment(num_particles=num_particles, 
+#								include_ignored_gt=False, include_dontcare_in_gt=False, 
+#								use_regionlets_and_lsvm=False, sort_dets_on_intervals=True)
+#
 #	#regionlets_only_no_score_intervals
 #	for num_particles in NUM_PARTICLES_TO_TEST:
 #		submit_single_experiment(num_particles=num_particles, 
